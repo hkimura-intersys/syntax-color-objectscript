@@ -1,0 +1,11 @@
+[package]
+name = "render-ansi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "ANSI/VT rendering adapter for highlight-spans and theme-engine output"
+
+[dependencies]
+highlight-spans = { path = "../highlight-spans" }
+theme-engine = { path = "../theme-engine" }
+thiserror = "1"
