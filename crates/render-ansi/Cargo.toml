@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "ANSI/VT rendering adapter for highlight-spans and theme-engine output"
+readme = "README.md"
 
 [dependencies]
 highlight-spans = { version = "0.1.0", path = "../highlight-spans" }
