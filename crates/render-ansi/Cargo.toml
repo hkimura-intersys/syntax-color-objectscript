@@ -6,6 +6,6 @@ license.workspace = true
 description = "ANSI/VT rendering adapter for highlight-spans and theme-engine output"
 
 [dependencies]
-highlight-spans = { path = "../highlight-spans" }
-theme-engine = { path = "../theme-engine" }
+highlight-spans = { version = "0.1.0", path = "../highlight-spans" }
+theme-engine = { version = "0.1.0", path = "../theme-engine" }
 thiserror = "1"
