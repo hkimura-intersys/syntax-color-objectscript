@@ -44,6 +44,7 @@ Purpose:
 
 - Convert ObjectScript text into `(attr_id, start_byte, end_byte)` spans.
 - Return an attribute table mapping `attr_id -> capture_name`.
+- [Crate README](crates/highlight-spans/README.md)
 
 Depends on:
 
@@ -61,6 +62,7 @@ Purpose:
 - Normalize capture keys (`@comment` and `comment` both resolve).
 - Support fallback (`comment.documentation -> comment -> normal`).
 - Include built-in themes: `tokyonight-dark`, `tokyonight-light`, `solarized-dark`, `solarized-light`.
+- [Crate README](crates/theme-engine/README.md)
 
 ### `render-ansi`
 
@@ -69,6 +71,7 @@ Purpose:
 - Convert highlighted byte spans into ANSI/VT escaped text.
 - Provide line-oriented APIs (`Vec<String>`) for terminal rendering.
 - Keep renderer logic separate from parsing and theme selection.
+- [Crate README](crates/render-ansi/README.md)
 
 ## Data Flow
 
@@ -111,6 +114,8 @@ for span in &result.spans {
 - [arc42 Architecture](docs/arc42.md)
 - [C4 Model](docs/c4.md)
 - [Design Doc](docs/design-doc.md)
+- [Integration Steps](docs/integration.md)
+- [Release and Publish Guide](docs/release.md)
 - [Usage Examples](docs/usage-examples.md)
 - [Data Structure: HighlightResult](docs/data-structures/highlight-result.md)
 - [Data Structure: Theme](docs/data-structures/theme.md)
