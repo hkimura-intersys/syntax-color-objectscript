@@ -43,7 +43,7 @@ Execution Status: Pending user approval.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EC-HL-001 | P0 | unit | Highlight | Numeric literal capture emits `number` span | At least one span maps to `number` and source slice `42` | existing | `crates/highlight-spans/src/lib.rs` |
 | EC-HL-002 | P1 | unit | Highlight | Zero-length source events are ignored by span merger | No span with `start_byte >= end_byte` is emitted | new | `crates/highlight-spans/src/lib.rs` |
-| EC-HL-003 | P1 | integration | Highlight | Grammar variants (`ObjectScriptCore`, `ObjectScriptExpr`) produce valid results | Highlight returns `Ok` and spans are internally consistent | new | `crates/highlight-spans/src/lib.rs` |
+| EC-HL-003 | P1 | integration | Highlight | Single grammar mode (`ObjectScript`) produces valid results | Highlight returns `Ok` and spans are internally consistent | new | `crates/highlight-spans/src/lib.rs` |
 | EC-TH-001 | P0 | unit | Theme | Dotted fallback (`comment.documentation -> comment`) | `resolve` returns parent style when leaf missing | existing | `crates/theme-engine/src/lib.rs` |
 | EC-TH-002 | P0 | unit | Theme | Unknown built-in name is rejected | `ThemeError::UnknownBuiltinTheme` | existing | `crates/theme-engine/src/lib.rs` |
 | EC-TH-003 | P1 | unit | Theme | Missing `normal` style and unknown capture | `resolve` returns `None` | new | `crates/theme-engine/src/lib.rs` |
@@ -62,13 +62,13 @@ Execution Status: Pending user approval.
 
 Blind spots:
 - Explicit out-of-bounds rendering rejection test (`EC-RN-003`) is missing.
-- Non-default grammar variants need direct coverage (`EC-HL-003`).
+- Single-grammar smoke coverage needs direct assertion (`EC-HL-003`).
 - Missing-`normal` fallback behavior lacks direct assertion (`EC-TH-003`).
 
 ## 7. Implementation Plan
 
 1. Add `EC-RN-003` out-of-bounds span test in `render-ansi`.
-2. Add `EC-HL-003` grammar-variant smoke tests in `highlight-spans`.
+2. Add `EC-HL-003` single-grammar smoke test in `highlight-spans`.
 3. Add `EC-TH-003` no-`normal` fallback test in `theme-engine`.
 4. Add `EC-HL-002` and `EC-RN-004` for edge handling in merge/render paths.
 
@@ -76,7 +76,7 @@ Dependencies and blocking prerequisites:
 - None beyond current workspace dependencies.
 
 Expected effort/risk notes:
-- Most additions are low-risk unit tests; grammar-variant tests are medium-risk due fixture selection.
+- Most additions are low-risk unit tests; highlight smoke tests are medium-risk due fixture selection.
 
 ## 8. Execution Plan
 

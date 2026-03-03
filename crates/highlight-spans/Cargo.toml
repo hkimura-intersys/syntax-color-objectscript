@@ -7,6 +7,6 @@ description = "Tree-sitter ObjectScript highlight spans as attr/start/end tuples
 
 [dependencies]
 thiserror = "1"
-tree-sitter = "0.25"
-tree-sitter-highlight = "0.25"
-tree-sitter-objectscript = "1.3.7"
+tree-sitter = ">=0.26.6"
+tree-sitter-highlight = ">=0.26.6"
+tree-sitter-objectscript = "1.4.0"

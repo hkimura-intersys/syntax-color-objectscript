@@ -26,11 +26,13 @@ pub struct CPaintOp {
 
 fn parse_grammar(input: &str) -> Result<Grammar, String> {
     match input.trim().to_ascii_lowercase().as_str() {
-        "objectscript" | "os" => Ok(Grammar::ObjectScript),
-        "objectscriptcore" | "objectscript_core" | "core" => Ok(Grammar::ObjectScriptCore),
-        "objectscriptexpr" | "objectscript_expr" | "expr" => Ok(Grammar::ObjectScriptExpr),
+        "objectscript"
+        | "os"
+        | "playground"
+        | "objectscriptplayground"
+        | "objectscript_playground" => Ok(Grammar::ObjectScript),
         _ => Err(format!(
-            "unknown grammar '{}'; use objectscript|core|expr",
+            "unknown grammar '{}'; use objectscript (aliases: os, objectscript_playground, playground)",
             input
         )),
     }
@@ -47,7 +49,11 @@ fn merge_with_normal(style: Option<Style>, normal: Style) -> Style {
     }
 }
 
-fn style_to_c_op(span_start: usize, span_end: usize, style: Style) -> Result<CPaintOp, Box<dyn Error>> {
+fn style_to_c_op(
+    span_start: usize,
+    span_end: usize,
+    style: Style,
+) -> Result<CPaintOp, Box<dyn Error>> {
     let start_byte = u32::try_from(span_start)?;
     let end_byte = u32::try_from(span_end)?;
 
@@ -89,13 +95,10 @@ fn build_c_paint_ops(
 ) -> Result<Vec<CPaintOp>, Box<dyn Error>> {
     let result = highlighter.highlight(source, grammar)?;
 
-    let normal = theme
-        .resolve("normal")
-        .copied()
-        .unwrap_or(Style {
-            fg: Some(Rgb::new(220, 220, 220)),
-            ..Style::default()
-        });
+    let normal = theme.resolve("normal").copied().unwrap_or(Style {
+        fg: Some(Rgb::new(220, 220, 220)),
+        ..Style::default()
+    });
 
     let mut ops = Vec::with_capacity(result.spans.len());
     for span in &result.spans {
@@ -115,11 +118,15 @@ fn build_c_paint_ops(
 
 fn print_usage() {
     eprintln!("Usage:");
-    eprintln!("  cargo run -p render-ansi --example zedit_bridge -- <source-file> [theme] [grammar]");
+    eprintln!(
+        "  cargo run -p render-ansi --example zedit_bridge -- <source-file> [theme] [grammar]"
+    );
     eprintln!();
     eprintln!("Examples:");
     eprintln!("  cargo run -p render-ansi --example zedit_bridge -- sample.cls");
-    eprintln!("  cargo run -p render-ansi --example zedit_bridge -- sample.mac solarized-dark core");
+    eprintln!(
+        "  cargo run -p render-ansi --example zedit_bridge -- sample.mac solarized-dark objectscript"
+    );
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

@@ -227,7 +227,7 @@ cargo run -p render-ansi --example zedit_bridge -- /path/to/file.cls
 Optional args:
 
 ```bash
-cargo run -p render-ansi --example zedit_bridge -- /path/to/file.cls solarized-dark core
+cargo run -p render-ansi --example zedit_bridge -- /path/to/file.cls solarized-dark objectscript
 ```
 
 Output format (one line per paint op):

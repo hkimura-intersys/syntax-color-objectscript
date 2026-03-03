@@ -8,11 +8,13 @@ use theme_engine::load_theme;
 
 fn parse_grammar(input: &str) -> Result<Grammar, String> {
     match input.trim().to_ascii_lowercase().as_str() {
-        "objectscript" | "os" => Ok(Grammar::ObjectScript),
-        "objectscriptcore" | "objectscript_core" | "core" => Ok(Grammar::ObjectScriptCore),
-        "objectscriptexpr" | "objectscript_expr" | "expr" => Ok(Grammar::ObjectScriptExpr),
+        "objectscript"
+        | "os"
+        | "playground"
+        | "objectscriptplayground"
+        | "objectscript_playground" => Ok(Grammar::ObjectScript),
         _ => Err(format!(
-            "unknown grammar '{}'; use objectscript|core|expr",
+            "unknown grammar '{}'; use objectscript (aliases: os, objectscript_playground, playground)",
             input
         )),
     }
@@ -20,11 +22,15 @@ fn parse_grammar(input: &str) -> Result<Grammar, String> {
 
 fn print_usage() {
     eprintln!("Usage:");
-    eprintln!("  cargo run -p render-ansi --example show_highlight -- <source-file> [theme] [grammar]");
+    eprintln!(
+        "  cargo run -p render-ansi --example show_highlight -- <source-file> [theme] [grammar]"
+    );
     eprintln!();
     eprintln!("Examples:");
     eprintln!("  cargo run -p render-ansi --example show_highlight -- sample.cls");
-    eprintln!("  cargo run -p render-ansi --example show_highlight -- sample.cls solarized-dark core");
+    eprintln!(
+        "  cargo run -p render-ansi --example show_highlight -- sample.cls solarized-dark objectscript"
+    );
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

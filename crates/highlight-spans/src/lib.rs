@@ -4,8 +4,6 @@ use tree_sitter_highlight::{HighlightConfiguration, HighlightEvent, Highlighter 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Grammar {
     ObjectScript,
-    ObjectScriptCore,
-    ObjectScriptExpr,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -45,38 +43,20 @@ pub enum HighlightError {
 pub struct SpanHighlighter {
     highlighter: TsHighlighter,
     objectscript: HighlightConfiguration,
-    objectscript_core: HighlightConfiguration,
-    objectscript_expr: HighlightConfiguration,
 }
 
 impl SpanHighlighter {
     pub fn new() -> Result<Self, HighlightError> {
         let objectscript = new_config(
-            tree_sitter_objectscript::LANGUAGE_OBJECTSCRIPT.into(),
+            tree_sitter_objectscript::LANGUAGE_OBJECTSCRIPT_PLAYGROUND.into(),
             "objectscript",
             tree_sitter_objectscript::OBJECTSCRIPT_HIGHLIGHTS_QUERY,
             tree_sitter_objectscript::OBJECTSCRIPT_INJECTIONS_QUERY,
         )?;
 
-        let objectscript_core = new_config(
-            tree_sitter_objectscript::LANGUAGE_OBJECTSCRIPT_CORE.into(),
-            "objectscript_core",
-            tree_sitter_objectscript::OBJECTSCRIPT_CORE_HIGHLIGHTS_QUERY,
-            tree_sitter_objectscript::OBJECTSCRIPT_CORE_INJECTIONS_QUERY,
-        )?;
-
-        let objectscript_expr = new_config(
-            tree_sitter_objectscript::LANGUAGE_OBJECTSCRIPT_EXPR.into(),
-            "objectscript_expr",
-            tree_sitter_objectscript::OBJECTSCRIPT_EXPR_HIGHLIGHTS_QUERY,
-            "",
-        )?;
-
         Ok(Self {
             highlighter: TsHighlighter::new(),
             objectscript,
-            objectscript_core,
-            objectscript_expr,
         })
     }
 
@@ -87,8 +67,6 @@ impl SpanHighlighter {
     ) -> Result<HighlightResult, HighlightError> {
         let config = match flavor {
             Grammar::ObjectScript => &self.objectscript,
-            Grammar::ObjectScriptCore => &self.objectscript_core,
-            Grammar::ObjectScriptExpr => &self.objectscript_expr,
         };
 
         let attrs = config

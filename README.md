@@ -48,9 +48,9 @@ Purpose:
 
 Depends on:
 
-- `tree-sitter-objectscript = "1.3.7"`
-- `tree-sitter-highlight = "0.25"`
-- `tree-sitter = "0.25"`
+- `tree-sitter-objectscript = "1.4.0"`
+- `tree-sitter-highlight = ">=0.26.6"`
+- `tree-sitter = ">=0.26.6"`
 
 ### `theme-engine`
 

@@ -8,10 +8,8 @@
 - `HighlightResult { attrs, spans }` where:
   - `attrs` maps `attr_id -> capture_name`
   - `spans` contains byte ranges tagged by `attr_id`
-- `Grammar` variants:
-  - `ObjectScript`
-  - `ObjectScriptCore`
-  - `ObjectScriptExpr`
+- `Grammar` variant:
+  - `ObjectScript` (backed by `LANGUAGE_OBJECTSCRIPT_PLAYGROUND`)
 
 ## Quick Example
 
