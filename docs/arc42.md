@@ -3,7 +3,7 @@
 ## 1. Introduction and Goals
 
 This document covers the full Rust workspace that provides ObjectScript highlighting data and ANSI rendering adapters (`Cargo.toml:1`, `Cargo.toml:2`).
-Primary audience: maintainers of this workspace and integrators embedding the crates in CLI/TUI tools (`crates/render-ansi/src/lib.rs:118`, `crates/highlight-spans/src/lib.rs:45`).
+Primary audience: maintainers of this workspace and integrators embedding the crates in CLI/TUI tools (`crates/render-ansi/src/lib.rs:118`, `crates/highlight-spans/src/lib.rs:43`).
 Goal: keep parser output, theme lookup, and rendering concerns independently evolvable (`crates/render-ansi/Cargo.toml:9`, `crates/render-ansi/Cargo.toml:10`, `crates/theme-engine/Cargo.toml:1`).
 
 ## 2. Constraints
@@ -19,8 +19,8 @@ Operational constraints:
 ## 3. Context and Scope
 
 External actors/systems:
-- Host applications call public crate APIs to highlight text and/or render ANSI (`crates/render-ansi/src/lib.rs:118`, `crates/highlight-spans/src/lib.rs:83`).
-- Tree-sitter grammar/query assets are external dependencies consumed by `highlight-spans` (`crates/highlight-spans/src/lib.rs:55`, `crates/highlight-spans/src/lib.rs:57`).
+- Host applications call public crate APIs to highlight text and/or render ANSI (`crates/render-ansi/src/lib.rs:118`, `crates/highlight-spans/src/lib.rs:63`).
+- Tree-sitter grammar/query assets are external dependencies consumed by `highlight-spans` (`crates/highlight-spans/src/lib.rs:51`, `crates/highlight-spans/src/lib.rs:53`).
 
 In scope:
 - `highlight-spans`, `theme-engine`, and `render-ansi` crate behavior and interfaces (`Cargo.toml:2`).
@@ -31,7 +31,7 @@ Out of scope:
 ## 4. Solution Strategy
 
 The workspace strategy is compositional:
-- Produce semantic capture spans from source (`crates/highlight-spans/src/lib.rs:83`, `crates/highlight-spans/src/lib.rs:129`).
+- Produce semantic capture spans from source (`crates/highlight-spans/src/lib.rs:63`, `crates/highlight-spans/src/lib.rs:107`).
 - Resolve capture names into styles with normalization and hierarchical fallback (`crates/theme-engine/src/lib.rs:117`, `crates/theme-engine/src/lib.rs:125`, `crates/theme-engine/src/lib.rs:193`).
 - Render styled ranges into ANSI-escaped output (`crates/render-ansi/src/lib.rs:53`, `crates/render-ansi/src/lib.rs:168`).
 
@@ -40,7 +40,7 @@ This fits the constraints because parser/grammar changes, theme changes, and out
 ## 5. Building Block View
 
 Main building blocks:
-- `highlight-spans`: `SpanHighlighter` returns `HighlightResult { attrs, spans }` (`crates/highlight-spans/src/lib.rs:45`, `crates/highlight-spans/src/lib.rs:32`).
+- `highlight-spans`: `SpanHighlighter` returns `HighlightResult { attrs, spans }` (`crates/highlight-spans/src/lib.rs:43`, `crates/highlight-spans/src/lib.rs:30`).
 - `theme-engine`: `Theme` maps normalized capture keys to `Style` and supports built-ins (`crates/theme-engine/src/lib.rs:82`, `crates/theme-engine/src/lib.rs:117`, `crates/theme-engine/src/lib.rs:144`).
 - `render-ansi`: converts `HighlightResult` + `Theme` into ANSI `String` or per-line `Vec<String>` (`crates/render-ansi/src/lib.rs:32`, `crates/render-ansi/src/lib.rs:53`, `crates/render-ansi/src/lib.rs:77`).
 
@@ -65,20 +65,20 @@ Reason: workspace contains reusable libraries and tests, without in-repo daemon/
 
 ## 8. Cross-Cutting Concepts
 
-- Error handling uses typed enums via `thiserror` in both highlight and render stages (`crates/highlight-spans/src/lib.rs:37`, `crates/render-ansi/src/lib.rs:14`, `crates/theme-engine/src/lib.rs:164`).
+- Error handling uses typed enums via `thiserror` in both highlight and render stages (`crates/highlight-spans/src/lib.rs:36`, `crates/render-ansi/src/lib.rs:14`, `crates/theme-engine/src/lib.rs:164`).
 - Capture naming is normalized (`@` stripping, lowercase) to reduce style key mismatch (`crates/theme-engine/src/lib.rs:193`).
 - Span safety is enforced before rendering through explicit bounds and overlap checks (`crates/render-ansi/src/lib.rs:217`, `crates/render-ansi/src/lib.rs:227`).
 
 ## 9. Architectural Decisions
 
-- Decision: use attr-table + span tuples instead of per-character styles to keep highlight output compact (`crates/highlight-spans/src/lib.rs:32`, `crates/highlight-spans/src/lib.rs:25`).
+- Decision: use attr-table + span tuples instead of per-character styles to keep highlight output compact (`crates/highlight-spans/src/lib.rs:30`, `crates/highlight-spans/src/lib.rs:23`).
 - Decision: dotted fallback in theme resolution (`comment.documentation -> comment -> normal`) to reduce required theme verbosity (`crates/theme-engine/src/lib.rs:125`, `crates/theme-engine/src/lib.rs:131`).
 - Decision: provide both whole-buffer and line-oriented rendering APIs for terminal integration flexibility (`crates/render-ansi/src/lib.rs:53`, `crates/render-ansi/src/lib.rs:77`).
 
 ## 10. Quality Requirements
 
 Reliability:
-- Highlight, theme, and render flows each have unit tests covering critical behavior (`crates/highlight-spans/src/lib.rs:183`, `crates/theme-engine/src/lib.rs:206`, `crates/render-ansi/src/lib.rs:247`).
+- Highlight, theme, and render flows each have unit tests covering critical behavior (`crates/highlight-spans/src/lib.rs:161`, `crates/theme-engine/src/lib.rs:206`, `crates/render-ansi/src/lib.rs:247`).
 - Renderer rejects invalid span ordering and out-of-bounds ranges (`crates/render-ansi/src/lib.rs:217`).
 
 Maintainability:
@@ -92,14 +92,14 @@ Maintainability:
 
 ## 12. Glossary
 
-- Attr: mapping from numeric `id` to capture name (`crates/highlight-spans/src/lib.rs:12`).
-- Span: byte range tagged with `attr_id` (`crates/highlight-spans/src/lib.rs:25`).
+- Attr: mapping from numeric `id` to capture name (`crates/highlight-spans/src/lib.rs:10`).
+- Span: byte range tagged with `attr_id` (`crates/highlight-spans/src/lib.rs:23`).
 - Theme: normalized capture-to-style lookup map (`crates/theme-engine/src/lib.rs:82`).
 - StyledSpan: render-time span with resolved optional style (`crates/render-ansi/src/lib.rs:8`).
 
 ### Critical Data Structures
 
-- `HighlightResult` (`crates/highlight-spans/src/lib.rs:32`)
+- `HighlightResult` (`crates/highlight-spans/src/lib.rs:30`)
 - `Theme` (`crates/theme-engine/src/lib.rs:82`)
 - `StyledSpan` (`crates/render-ansi/src/lib.rs:8`)
 
@@ -121,13 +121,13 @@ Maintainability:
 - `Cargo.toml:6`
 - `crates/highlight-spans/Cargo.toml:10`
 - `crates/highlight-spans/Cargo.toml:12`
-- `crates/highlight-spans/src/lib.rs:12`
-- `crates/highlight-spans/src/lib.rs:25`
-- `crates/highlight-spans/src/lib.rs:32`
-- `crates/highlight-spans/src/lib.rs:45`
-- `crates/highlight-spans/src/lib.rs:83`
-- `crates/highlight-spans/src/lib.rs:129`
-- `crates/highlight-spans/src/lib.rs:183`
+- `crates/highlight-spans/src/lib.rs:10`
+- `crates/highlight-spans/src/lib.rs:23`
+- `crates/highlight-spans/src/lib.rs:30`
+- `crates/highlight-spans/src/lib.rs:43`
+- `crates/highlight-spans/src/lib.rs:63`
+- `crates/highlight-spans/src/lib.rs:107`
+- `crates/highlight-spans/src/lib.rs:161`
 - `crates/theme-engine/src/lib.rs:45`
 - `crates/theme-engine/src/lib.rs:82`
 - `crates/theme-engine/src/lib.rs:117`

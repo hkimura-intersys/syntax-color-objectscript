@@ -3,14 +3,14 @@
 ## Problem
 
 ObjectScript highlighting needs semantic parsing, style selection, and output formatting, but coupling these concerns makes maintenance harder when grammars, themes, or render targets change independently (`Cargo.toml:2`, `crates/render-ansi/Cargo.toml:9`, `crates/render-ansi/Cargo.toml:10`).
-The repository addresses this by isolating syntax extraction (`highlight-spans`), style resolution (`theme-engine`), and ANSI adapter behavior (`render-ansi`) (`crates/highlight-spans/src/lib.rs:83`, `crates/theme-engine/src/lib.rs:117`, `crates/render-ansi/src/lib.rs:53`).
+The repository addresses this by isolating syntax extraction (`highlight-spans`), style resolution (`theme-engine`), and ANSI adapter behavior (`render-ansi`) (`crates/highlight-spans/src/lib.rs:63`, `crates/theme-engine/src/lib.rs:117`, `crates/render-ansi/src/lib.rs:53`).
 
 ## Goals
 
-- Provide reusable syntax highlighting spans with stable attr IDs and byte ranges (`crates/highlight-spans/src/lib.rs:25`, `crates/highlight-spans/src/lib.rs:32`).
+- Provide reusable syntax highlighting spans with stable attr IDs and byte ranges (`crates/highlight-spans/src/lib.rs:23`, `crates/highlight-spans/src/lib.rs:30`).
 - Provide normalized capture-name style lookup with fallback (`crates/theme-engine/src/lib.rs:117`, `crates/theme-engine/src/lib.rs:125`, `crates/theme-engine/src/lib.rs:193`).
 - Provide ANSI rendering APIs for full buffers and per-line output (`crates/render-ansi/src/lib.rs:53`, `crates/render-ansi/src/lib.rs:77`).
-- Keep error surfaces explicit with typed error enums (`crates/highlight-spans/src/lib.rs:37`, `crates/theme-engine/src/lib.rs:164`, `crates/render-ansi/src/lib.rs:14`).
+- Keep error surfaces explicit with typed error enums (`crates/highlight-spans/src/lib.rs:36`, `crates/theme-engine/src/lib.rs:164`, `crates/render-ansi/src/lib.rs:14`).
 
 ## Non-Goals
 
@@ -20,7 +20,7 @@ The repository addresses this by isolating syntax extraction (`highlight-spans`)
 
 ## Current Behavior
 
-`SpanHighlighter` builds grammar-specific `HighlightConfiguration` objects and emits merged spans keyed by attr IDs (`crates/highlight-spans/src/lib.rs:53`, `crates/highlight-spans/src/lib.rs:94`, `crates/highlight-spans/src/lib.rs:164`).
+`SpanHighlighter` builds the ObjectScript `HighlightConfiguration` and emits merged spans keyed by attr IDs (`crates/highlight-spans/src/lib.rs:49`, `crates/highlight-spans/src/lib.rs:72`, `crates/highlight-spans/src/lib.rs:142`).
 `Theme` normalizes capture names, resolves dotted fallback chains, and loads built-in JSON themes via `include_str!` (`crates/theme-engine/src/lib.rs:117`, `crates/theme-engine/src/lib.rs:125`, `crates/theme-engine/src/lib.rs:45`, `crates/theme-engine/src/lib.rs:193`).
 `render-ansi` validates span ranges, maps spans to styles, and emits SGR open/reset sequences around each styled segment (`crates/render-ansi/src/lib.rs:32`, `crates/render-ansi/src/lib.rs:54`, `crates/render-ansi/src/lib.rs:163`, `crates/render-ansi/src/lib.rs:217`).
 
@@ -47,7 +47,7 @@ This proposal preserves API behavior while clarifying module contracts:
 ## Tradeoffs
 
 Benefits:
-- Better modularity and easier testing of each stage (`crates/highlight-spans/src/lib.rs:179`, `crates/theme-engine/src/lib.rs:199`, `crates/render-ansi/src/lib.rs:238`).
+- Better modularity and easier testing of each stage (`crates/highlight-spans/src/lib.rs:157`, `crates/theme-engine/src/lib.rs:199`, `crates/render-ansi/src/lib.rs:238`).
 - Reuse of parsing and theming for future non-ANSI adapters (`Cargo.toml:2`).
 
 Costs:
@@ -56,19 +56,19 @@ Costs:
 
 ## Validation Plan
 
-- Keep unit tests that assert parser capture behavior, theme fallback behavior, and ANSI rendering correctness (`crates/highlight-spans/src/lib.rs:183`, `crates/theme-engine/src/lib.rs:213`, `crates/render-ansi/src/lib.rs:248`).
+- Keep unit tests that assert parser capture behavior, theme fallback behavior, and ANSI rendering correctness (`crates/highlight-spans/src/lib.rs:161`, `crates/theme-engine/src/lib.rs:213`, `crates/render-ansi/src/lib.rs:248`).
 - Add doc maintenance checks by requiring evidence-backed citations for architecture claims (implemented in this documentation set).
 - Run `cargo test` in workspace after documentation updates to ensure referenced behavior remains true (`README.md:121`).
 
 ## Risks
 
-- If Tree-sitter capture names change upstream, themes can silently miss styles and rely on `normal` fallback (`crates/theme-engine/src/lib.rs:131`, `crates/highlight-spans/src/lib.rs:94`).
-- Byte-based spans require consumers to keep source buffers unchanged between highlight and render phases (`crates/highlight-spans/src/lib.rs:27`, `crates/render-ansi/src/lib.rs:64`).
+- If Tree-sitter capture names change upstream, themes can silently miss styles and rely on `normal` fallback (`crates/theme-engine/src/lib.rs:131`, `crates/highlight-spans/src/lib.rs:72`).
+- Byte-based spans require consumers to keep source buffers unchanged between highlight and render phases (`crates/highlight-spans/src/lib.rs:25`, `crates/render-ansi/src/lib.rs:64`).
 
 ## Alternatives
 
 - Monolithic single crate combining parse/theme/render: rejected because it increases coupling and reduces reusability across output targets (`Cargo.toml:2`).
-- Theme resolution directly in `highlight-spans`: rejected because it would force parser crate to own style concerns (`crates/highlight-spans/src/lib.rs:32`, `crates/theme-engine/src/lib.rs:82`).
+- Theme resolution directly in `highlight-spans`: rejected because it would force parser crate to own style concerns (`crates/highlight-spans/src/lib.rs:30`, `crates/theme-engine/src/lib.rs:82`).
 
 ## Assumptions
 
@@ -85,16 +85,16 @@ Costs:
 - `Cargo.toml:1`
 - `Cargo.toml:2`
 - `README.md:121`
+- `crates/highlight-spans/src/lib.rs:23`
 - `crates/highlight-spans/src/lib.rs:25`
-- `crates/highlight-spans/src/lib.rs:27`
-- `crates/highlight-spans/src/lib.rs:32`
-- `crates/highlight-spans/src/lib.rs:37`
-- `crates/highlight-spans/src/lib.rs:53`
-- `crates/highlight-spans/src/lib.rs:83`
-- `crates/highlight-spans/src/lib.rs:94`
-- `crates/highlight-spans/src/lib.rs:164`
-- `crates/highlight-spans/src/lib.rs:179`
-- `crates/highlight-spans/src/lib.rs:183`
+- `crates/highlight-spans/src/lib.rs:30`
+- `crates/highlight-spans/src/lib.rs:36`
+- `crates/highlight-spans/src/lib.rs:49`
+- `crates/highlight-spans/src/lib.rs:63`
+- `crates/highlight-spans/src/lib.rs:72`
+- `crates/highlight-spans/src/lib.rs:142`
+- `crates/highlight-spans/src/lib.rs:157`
+- `crates/highlight-spans/src/lib.rs:161`
 - `crates/theme-engine/src/lib.rs:45`
 - `crates/theme-engine/src/lib.rs:82`
 - `crates/theme-engine/src/lib.rs:117`

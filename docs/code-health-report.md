@@ -25,7 +25,7 @@ The workspace is cleanly modular, but two hot-path inefficiencies stand out: rep
 
 ### Finding CH-001: Double Source Materialization in Line APIs
 
-- Evidence: `crates/highlight-spans/src/lib.rs:137`, `crates/highlight-spans/src/lib.rs:142`, `crates/render-ansi/src/lib.rs:153`, `crates/render-ansi/src/lib.rs:154`
+- Evidence: `crates/highlight-spans/src/lib.rs:115`, `crates/highlight-spans/src/lib.rs:120`, `crates/render-ansi/src/lib.rs:153`, `crates/render-ansi/src/lib.rs:154`
 - Impact: For large inputs, joining line slices into a temporary full string multiple times increases memory churn and CPU spent on repeated concatenation.
 - Suggested change: Introduce a shared helper returning `(source, line_offsets)` once, then reuse for both highlight and render-line phases.
 - Effort: M

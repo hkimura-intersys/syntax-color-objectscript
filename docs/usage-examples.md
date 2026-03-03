@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 **Explanation:**
-1. `SpanHighlighter::new` initializes grammar configurations.
+1. `SpanHighlighter::new` initializes the ObjectScript highlight configuration.
 2. `highlight` returns `HighlightResult` with attr table and byte ranges.
 3. `attr_id` indexes into `attrs` to recover capture names.
 
@@ -67,15 +67,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Evidence
 
-- `crates/highlight-spans/src/lib.rs:53` (constructor)
-- `crates/highlight-spans/src/lib.rs:83` (highlight API)
-- `crates/highlight-spans/src/lib.rs:132` (line API)
-- `crates/highlight-spans/src/lib.rs:32` (result type)
+- `crates/highlight-spans/src/lib.rs:49` (constructor)
+- `crates/highlight-spans/src/lib.rs:63` (highlight API)
+- `crates/highlight-spans/src/lib.rs:112` (line API)
+- `crates/highlight-spans/src/lib.rs:30` (result type)
 
 ### Validation Notes
 
 - Verified signature against code: Yes
-- Verified usage in tests or examples: Yes (`crates/highlight-spans/src/lib.rs:183`)
+- Verified usage in tests or examples: Yes (`crates/highlight-spans/src/lib.rs:161`)
 - Mismatches or assumptions: None
 
 ## Example UX-002: Build and Resolve Themes with Fallback

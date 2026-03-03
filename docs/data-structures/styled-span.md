@@ -8,7 +8,7 @@
 ## Scope
 
 - In scope: `render-ansi` transformation and validation pipeline (`crates/render-ansi/src/lib.rs:32`, `crates/render-ansi/src/lib.rs:217`).
-- Out of scope: syntax extraction and theme-map internals (`crates/highlight-spans/src/lib.rs:83`, `crates/theme-engine/src/lib.rs:82`).
+- Out of scope: syntax extraction and theme-map internals (`crates/highlight-spans/src/lib.rs:63`, `crates/theme-engine/src/lib.rs:82`).
 
 ## Canonical Definition
 
@@ -43,7 +43,7 @@
 
 - Primary update flow tracks changes in `Theme::resolve` semantics and highlight attr IDs (`crates/theme-engine/src/lib.rs:117`, `crates/render-ansi/src/lib.rs:38`).
 - Background jobs or batch processes: Not applicable.
-- Migration strategy: keep `StyledSpan` byte-range contract aligned with `HighlightResult` span contract (`crates/highlight-spans/src/lib.rs:25`, `crates/render-ansi/src/lib.rs:9`).
+- Migration strategy: keep `StyledSpan` byte-range contract aligned with `HighlightResult` span contract (`crates/highlight-spans/src/lib.rs:23`, `crates/render-ansi/src/lib.rs:9`).
 
 ## Storage and Access
 

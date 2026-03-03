@@ -8,7 +8,7 @@
 ## Scope
 
 - In scope: `theme-engine` type definitions and lookup behavior (`crates/theme-engine/src/lib.rs:67`, `crates/theme-engine/src/lib.rs:82`).
-- Out of scope: parser capture generation and terminal escape emission (`crates/highlight-spans/src/lib.rs:83`, `crates/render-ansi/src/lib.rs:163`).
+- Out of scope: parser capture generation and terminal escape emission (`crates/highlight-spans/src/lib.rs:63`, `crates/render-ansi/src/lib.rs:163`).
 
 ## Canonical Definition
 

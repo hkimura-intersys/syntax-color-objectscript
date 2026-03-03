@@ -115,10 +115,10 @@ Expected effort/risk notes:
 
 ## Evidence
 
-- `crates/highlight-spans/src/lib.rs:83`
-- `crates/highlight-spans/src/lib.rs:132`
-- `crates/highlight-spans/src/lib.rs:164`
-- `crates/highlight-spans/src/lib.rs:183`
+- `crates/highlight-spans/src/lib.rs:63`
+- `crates/highlight-spans/src/lib.rs:112`
+- `crates/highlight-spans/src/lib.rs:142`
+- `crates/highlight-spans/src/lib.rs:161`
 - `crates/theme-engine/src/lib.rs:117`
 - `crates/theme-engine/src/lib.rs:125`
 - `crates/theme-engine/src/lib.rs:131`
