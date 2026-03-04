@@ -5,6 +5,7 @@ use tree_sitter::StreamingIterator;
 use tree_sitter_highlight::{HighlightConfiguration, HighlightEvent, Highlighter as TsHighlighter};
 
 unsafe extern "C" {
+    /// Returns the SQL Tree-sitter language handle from the vendored parser.
     fn tree_sitter_sql() -> *const ();
 }
 
@@ -31,12 +32,17 @@ pub enum Grammar {
 const SUPPORTED_GRAMMARS: [&str; 5] = ["objectscript", "sql", "python", "markdown", "mdx"];
 
 impl Grammar {
+    /// Parses a grammar name or alias into a [`Grammar`] value.
+    ///
+    /// The input is normalized to lowercase alphanumeric characters, so values
+    /// such as `"ObjectScript"`, `"objectscript-playground"`, and `"os"` are accepted.
     #[must_use]
     pub fn from_name(input: &str) -> Option<Self> {
         let normalized = normalize_language_name(input);
         grammar_from_normalized_name(&normalized)
     }
 
+    /// Returns the canonical lowercase name for this grammar.
     #[must_use]
     pub fn canonical_name(self) -> &'static str {
         match self {
@@ -48,6 +54,7 @@ impl Grammar {
         }
     }
 
+    /// Returns the canonical grammar names accepted by the CLI-facing APIs.
     #[must_use]
     pub fn supported_names() -> &'static [&'static str] {
         &SUPPORTED_GRAMMARS
@@ -61,6 +68,7 @@ pub struct Attr {
 }
 
 impl Attr {
+    /// Returns the theme lookup key for this capture (for example `"@keyword"`).
     #[must_use]
     pub fn theme_key(&self) -> String {
         format!("@{}", self.capture_name)
@@ -113,6 +121,15 @@ struct InjectionRegion {
 }
 
 impl SpanHighlighter {
+    /// Creates a highlighter configured for all supported grammars and injections.
+    ///
+    /// This preloads Tree-sitter highlight configurations for ObjectScript, SQL,
+    /// Python, and Markdown variants, and builds a unified capture table.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any grammar query cannot be compiled or if parser
+    /// language configuration fails.
     pub fn new() -> Result<Self, HighlightError> {
         let objectscript_language: tree_sitter::Language =
             tree_sitter_objectscript::LANGUAGE_OBJECTSCRIPT_PLAYGROUND.into();
@@ -199,6 +216,15 @@ impl SpanHighlighter {
         })
     }
 
+    /// Highlights a source buffer and returns capture attributes plus byte spans.
+    ///
+    /// When `flavor` is [`Grammar::ObjectScript`], language injections are resolved
+    /// and applied to injected regions (for example embedded SQL blocks).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Tree-sitter highlighting fails or if injection parsing
+    /// cannot be completed.
     pub fn highlight(
         &mut self,
         source: &[u8],
@@ -211,6 +237,14 @@ impl SpanHighlighter {
         Ok(result)
     }
 
+    /// Runs the base Tree-sitter highlight pass for a single grammar.
+    ///
+    /// Unlike [`Self::highlight`], this does not apply post-processing for
+    /// ObjectScript injection regions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Tree-sitter fails to emit highlight events.
     fn highlight_base(
         &mut self,
         source: &[u8],
@@ -267,6 +301,11 @@ impl SpanHighlighter {
         Ok(HighlightResult { attrs, spans })
     }
 
+    /// Highlights line-oriented input by joining lines with `\n`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::highlight`].
     pub fn highlight_lines<S: AsRef<str>>(
         &mut self,
         lines: &[S],
@@ -280,6 +319,14 @@ impl SpanHighlighter {
         self.highlight(source.as_bytes(), flavor)
     }
 
+    /// Replaces ObjectScript injection regions in `base` with injected highlights.
+    ///
+    /// This method removes spans from injected byte ranges and merges spans produced
+    /// by the injected language highlighter.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if injection discovery or nested highlighting fails.
     fn apply_objectscript_injections(
         &mut self,
         source: &[u8],
@@ -327,6 +374,11 @@ impl SpanHighlighter {
         Ok(())
     }
 
+    /// Finds non-overlapping ObjectScript injection regions in the source buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if parsing or query execution for injection analysis fails.
     fn find_objectscript_injections(
         &self,
         source: &[u8],
@@ -374,6 +426,9 @@ impl SpanHighlighter {
         Ok(non_overlapping)
     }
 
+    /// Converts a query match to an [`InjectionRegion`] when captures are complete.
+    ///
+    /// Returns `None` when language or content captures are missing, unknown, or empty.
     fn injection_region_for_match<'a>(
         &self,
         source: &'a [u8],
@@ -435,6 +490,9 @@ struct InjectionConfigs<'a> {
 }
 
 impl<'a> InjectionConfigs<'a> {
+    /// Resolves an injected language name to a highlight configuration.
+    ///
+    /// Unknown language names return `None` so Tree-sitter skips injection highlighting.
     fn resolve(&self, language_name: &str) -> Option<&'a HighlightConfiguration> {
         let normalized = normalize_language_name(language_name);
         if normalized == "markdowninline" {
@@ -452,6 +510,8 @@ impl<'a> InjectionConfigs<'a> {
     }
 }
 
+/// Normalizes a language name by retaining only ASCII alphanumerics and
+/// lowercasing the result.
 fn normalize_language_name(input: &str) -> String {
     input
         .chars()
@@ -460,6 +520,7 @@ fn normalize_language_name(input: &str) -> String {
         .collect()
 }
 
+/// Maps a normalized language name to a supported [`Grammar`].
 fn grammar_from_normalized_name(normalized: &str) -> Option<Grammar> {
     match normalized {
         "objectscript" | "os" | "playground" | "objectscriptplayground" => {
@@ -473,6 +534,12 @@ fn grammar_from_normalized_name(normalized: &str) -> Option<Grammar> {
     }
 }
 
+/// Builds and configures a Tree-sitter highlight configuration.
+///
+/// # Errors
+///
+/// Returns an error when the highlight or injection query is invalid for the
+/// provided language.
 fn new_config(
     language: tree_sitter::Language,
     language_name: &str,
@@ -491,6 +558,8 @@ fn new_config(
     Ok(config)
 }
 
+/// Pushes a span into `spans`, merging with the previous span when adjacent and
+/// sharing the same attribute id.
 fn push_merged(spans: &mut Vec<Span>, next: Span) {
     if next.start_byte >= next.end_byte {
         return;
@@ -506,6 +575,9 @@ fn push_merged(spans: &mut Vec<Span>, next: Span) {
     spans.push(next);
 }
 
+/// Remaps incoming attribute ids to ids in the destination attribute table.
+///
+/// Existing destination ids are reused by capture name; new capture names are appended.
 fn remap_attr_ids(
     incoming: &[Attr],
     attrs: &mut Vec<Attr>,
@@ -532,6 +604,7 @@ fn remap_attr_ids(
     remap
 }
 
+/// Removes byte `ranges` from `spans`, splitting spans as needed.
 fn exclude_ranges(spans: &[Span], ranges: &[(usize, usize)]) -> Vec<Span> {
     if ranges.is_empty() {
         return spans.to_vec();
@@ -591,6 +664,7 @@ fn exclude_ranges(spans: &[Span], ranges: &[(usize, usize)]) -> Vec<Span> {
     out
 }
 
+/// Sorts spans and enforces a non-overlapping, merge-friendly representation.
 fn normalize_spans(mut spans: Vec<Span>) -> Vec<Span> {
     spans.sort_by(|a, b| {
         a.start_byte
@@ -618,6 +692,7 @@ fn normalize_spans(mut spans: Vec<Span>) -> Vec<Span> {
 mod tests {
     use super::{Grammar, HighlightResult, SpanHighlighter};
 
+    /// Returns whether `expected_text` appears under `capture_name` in `result`.
     fn has_capture_for_text(
         result: &HighlightResult,
         source: &[u8],
@@ -640,6 +715,7 @@ mod tests {
     }
 
     #[test]
+    /// Verifies ObjectScript numeric literals are tagged as `number`.
     fn highlights_numeric_literal_as_number() {
         let source = br#"
 Class Demo.Highlight
@@ -662,6 +738,7 @@ Class Demo.Highlight
     }
 
     #[test]
+    /// Verifies canonical and alias grammar names resolve correctly.
     fn parses_supported_grammar_aliases() {
         assert_eq!(
             Grammar::from_name("objectscript"),
@@ -675,6 +752,7 @@ Class Demo.Highlight
     }
 
     #[test]
+    /// Verifies SQL keywords are captured as `keyword`.
     fn highlights_sql_keyword() {
         let source = b"SELECT 42 FROM Demo";
         let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
@@ -689,6 +767,7 @@ Class Demo.Highlight
     }
 
     #[test]
+    /// Verifies `%SQLQuery` bodies are highlighted via SQL injection handling.
     fn objectscript_sqlquery_body_is_highlighted_as_sql() {
         let source = br#"
 Class Test
@@ -711,6 +790,7 @@ SELECT ID,Name FROM Employee
     }
 
     #[test]
+    /// Verifies Python numeric literals are highlighted as `number`.
     fn highlights_python_number() {
         let source = b"def f(x):\n    return x + 1\n";
         let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
@@ -725,6 +805,7 @@ SELECT ID,Name FROM Employee
     }
 
     #[test]
+    /// Verifies Markdown heading text is captured as `text.title`.
     fn highlights_markdown_heading() {
         let source = b"# Heading\n";
         let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
@@ -739,6 +820,7 @@ SELECT ID,Name FROM Employee
     }
 
     #[test]
+    /// Verifies MDX currently falls back to SQL keyword highlighting.
     fn mdx_falls_back_to_sql_keyword_highlighting() {
         let source = b"SELECT 1 FROM Cube";
         let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");

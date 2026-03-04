@@ -1,3 +1,4 @@
+/// Compiles vendored C grammars required by the crate.
 fn main() {
     compile_vendor_grammar(
         "vendor/tree-sitter-sql",
@@ -6,6 +7,7 @@ fn main() {
     );
 }
 
+/// Compiles a vendored Tree-sitter C grammar and emits rerun-if-changed hints.
 fn compile_vendor_grammar(base_dir: &str, lib_name: &str, extra_paths: &[&str]) {
     let src_dir = std::path::Path::new(base_dir).join("src");
     let parser_path = src_dir.join("parser.c");

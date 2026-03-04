@@ -25,6 +25,7 @@ pub struct CPaintOp {
     pub flags: u8,
 }
 
+/// Parses a grammar argument and returns a human-friendly error on failure.
 fn parse_grammar(input: &str) -> Result<Grammar, String> {
     Grammar::from_name(input).ok_or_else(|| {
         format!(
@@ -35,6 +36,7 @@ fn parse_grammar(input: &str) -> Result<Grammar, String> {
     })
 }
 
+/// Merges a resolved style with the theme's `normal` fallback style.
 fn merge_with_normal(style: Option<Style>, normal: Style) -> Style {
     let style = style.unwrap_or_default();
     Style {
@@ -46,6 +48,11 @@ fn merge_with_normal(style: Option<Style>, normal: Style) -> Style {
     }
 }
 
+/// Converts a styled byte span to a C-compatible paint operation.
+///
+/// # Errors
+///
+/// Returns an error if span offsets cannot fit in `u32`.
 fn style_to_c_op(
     span_start: usize,
     span_end: usize,
@@ -84,6 +91,11 @@ fn style_to_c_op(
     })
 }
 
+/// Builds C paint operations from highlighted spans and resolved theme styles.
+///
+/// # Errors
+///
+/// Returns an error if highlighting, style resolution, or offset conversion fails.
 fn build_c_paint_ops(
     source: &[u8],
     grammar: Grammar,
@@ -107,6 +119,7 @@ fn build_c_paint_ops(
     Ok(ops)
 }
 
+/// Prints CLI usage for the `zedit_bridge` example.
 fn print_usage() {
     eprintln!("Usage:");
     eprintln!(
@@ -121,6 +134,12 @@ fn print_usage() {
     eprintln!("  cargo run -p render-ansi --example zedit_bridge -- sample.sql solarized-dark sql");
 }
 
+/// Loads a file and prints paint operations for external C/TUI integration.
+///
+/// # Errors
+///
+/// Returns an error when argument parsing, file IO, theme loading, highlighting,
+/// or span conversion fails.
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {

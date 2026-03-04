@@ -35,6 +35,11 @@ The workspace strategy is compositional:
 - Resolve capture names into styles with normalization and hierarchical fallback (`crates/theme-engine/src/lib.rs:117`, `crates/theme-engine/src/lib.rs:125`, `crates/theme-engine/src/lib.rs:193`).
 - Render styled ranges into ANSI-escaped output (`crates/render-ansi/src/lib.rs:53`, `crates/render-ansi/src/lib.rs:168`).
 
+Recent update (March 2026):
+- Incremental VT patch rendering now supports configurable terminal origin offsets (`row`, `col`) for prompt-aware placement (`crates/render-ansi/src/lib.rs:70`).
+- Incremental column math is display-width based (grapheme-aware) instead of raw byte/char count (`crates/render-ansi/src/lib.rs:421`, `crates/render-ansi/src/lib.rs:497`, `crates/render-ansi/src/lib.rs:531`).
+- `render-ansi` now depends on `unicode-segmentation` and `unicode-width` for this behavior (`crates/render-ansi/Cargo.toml:13`, `crates/render-ansi/Cargo.toml:14`).
+
 This fits the constraints because parser/grammar changes, theme changes, and output adapter changes remain localized to separate crates (`Cargo.toml:2`).
 
 ## 5. Building Block View
@@ -141,6 +146,8 @@ Maintainability:
 - `crates/theme-engine/src/lib.rs:206`
 - `crates/render-ansi/Cargo.toml:9`
 - `crates/render-ansi/Cargo.toml:10`
+- `crates/render-ansi/Cargo.toml:13`
+- `crates/render-ansi/Cargo.toml:14`
 - `crates/render-ansi/src/lib.rs:8`
 - `crates/render-ansi/src/lib.rs:14`
 - `crates/render-ansi/src/lib.rs:32`
@@ -153,6 +160,9 @@ Maintainability:
 - `crates/render-ansi/src/lib.rs:133`
 - `crates/render-ansi/src/lib.rs:168`
 - `crates/render-ansi/src/lib.rs:171`
+- `crates/render-ansi/src/lib.rs:421`
+- `crates/render-ansi/src/lib.rs:497`
+- `crates/render-ansi/src/lib.rs:531`
 - `crates/render-ansi/src/lib.rs:217`
 - `crates/render-ansi/src/lib.rs:227`
 - `crates/render-ansi/src/lib.rs:247`

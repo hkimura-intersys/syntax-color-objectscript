@@ -10,7 +10,9 @@
   - `comment.documentation -> comment -> normal`
 - Built-in themes:
   - `tokyonight-dark`
+  - `tokyonight-moon`
   - `tokyonight-light`
+  - `tokyonight-day`
   - `solarized-dark`
   - `solarized-light`
 - Theme loading from JSON and TOML strings.

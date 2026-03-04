@@ -39,6 +39,8 @@ Use `highlight_lines_to_ansi_lines(...)` when your terminal UI redraws line-by-l
 ### Optional: incremental VT patch output for interactive IRIS sessions
 
 Use `IncrementalRenderer` (or the `vt_patch_bridge` example) when you want to update only changed regions.
+Set an origin offset when your editable region starts after a prompt.
+For a full end-to-end walkthrough, see `docs/incremental-terminal-highlighting.md`.
 
 ```bash
 # old and new SQL command snapshots from your IRIS terminal host
@@ -60,10 +62,12 @@ EOF
 cargo run -p render-ansi --example vt_patch_bridge -- \
   /tmp/iris-new.sql tokyonight-dark sql \
   --prev /tmp/iris-old.sql \
-  --width 120 --height 40
+  --width 120 --height 40 \
+  --origin-row 4 --origin-col 7
 ```
 
 Output is a patch stream (cursor movement + SGR + erase), not a full-frame redraw.
+Patch columns are display-width based (grapheme-aware), so wide Unicode and tabs do not use raw-byte offsets.
 
 If you multiplex multiple IRIS terminals in one host process, prefer `IncrementalSessionManager` so each terminal ID keeps isolated prior-frame state.
 
@@ -269,5 +273,7 @@ Output format (one line per paint op):
 For VT patch output instead of paint ops:
 
 ```bash
-cargo run -p render-ansi --example vt_patch_bridge -- /path/to/file.sql tokyonight-dark sql
+cargo run -p render-ansi --example vt_patch_bridge -- \
+  /path/to/file.sql tokyonight-dark sql \
+  --origin-row 4 --origin-col 7
 ```

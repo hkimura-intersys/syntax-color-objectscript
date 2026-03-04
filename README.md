@@ -65,7 +65,7 @@ Purpose:
   - `bold`, `italic`, `underline`
 - Normalize capture keys (`@comment` and `comment` both resolve).
 - Support fallback (`comment.documentation -> comment -> normal`).
-- Include built-in themes: `tokyonight-dark`, `tokyonight-light`, `solarized-dark`, `solarized-light`.
+- Include built-in themes: `tokyonight-dark`, `tokyonight-moon`, `tokyonight-light`, `tokyonight-day`, `solarized-dark`, `solarized-light`.
 - [Crate README](crates/theme-engine/README.md)
 
 ### `render-ansi`
@@ -74,6 +74,8 @@ Purpose:
 
 - Convert highlighted byte spans into ANSI/VT escaped text.
 - Provide line-oriented APIs (`Vec<String>`) for terminal rendering.
+- Provide incremental VT patching with configurable terminal origin offsets (`row`, `col`).
+- Compute incremental patch columns using grapheme/display-width logic (wide Unicode and tabs).
 - Keep renderer logic separate from parsing and theme selection.
 - [Crate README](crates/render-ansi/README.md)
 
@@ -119,6 +121,7 @@ for span in &result.spans {
 - [C4 Model](docs/c4.md)
 - [Design Doc](docs/design-doc.md)
 - [Integration Steps](docs/integration.md)
+- [Incremental Terminal Highlighting Guide](docs/incremental-terminal-highlighting.md)
 - [Release and Publish Guide](docs/release.md)
 - [Usage Examples](docs/usage-examples.md)
 - [Data Structure: HighlightResult](docs/data-structures/highlight-result.md)

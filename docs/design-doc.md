@@ -24,6 +24,11 @@ The repository addresses this by isolating syntax extraction (`highlight-spans`)
 `Theme` normalizes capture names, resolves dotted fallback chains, and loads built-in JSON themes via `include_str!` (`crates/theme-engine/src/lib.rs:117`, `crates/theme-engine/src/lib.rs:125`, `crates/theme-engine/src/lib.rs:45`, `crates/theme-engine/src/lib.rs:193`).
 `render-ansi` validates span ranges, maps spans to styles, and emits SGR open/reset sequences around each styled segment (`crates/render-ansi/src/lib.rs:32`, `crates/render-ansi/src/lib.rs:54`, `crates/render-ansi/src/lib.rs:163`, `crates/render-ansi/src/lib.rs:217`).
 
+Recent incremental-path behavior:
+- Incremental patch generation supports configurable origin offsets (`row`, `col`) for prompt-aware cursor placement (`crates/render-ansi/src/lib.rs:70`).
+- Incremental cursor column calculation is display-width based (grapheme-aware) and includes tab-stop handling (`crates/render-ansi/src/lib.rs:421`, `crates/render-ansi/src/lib.rs:475`, `crates/render-ansi/src/lib.rs:497`).
+- This behavior is backed by `unicode-segmentation` and `unicode-width` dependencies (`crates/render-ansi/Cargo.toml:13`, `crates/render-ansi/Cargo.toml:14`).
+
 ## Proposal
 
 Keep the existing three-layer architecture as the baseline integration contract and document it as the canonical workspace flow. Add formal repo-level docs that define boundaries, key structures, and dynamic path to reduce onboarding and prevent drift between crates.
@@ -107,6 +112,8 @@ Costs:
 - `crates/render-ansi/Cargo.toml:1`
 - `crates/render-ansi/Cargo.toml:9`
 - `crates/render-ansi/Cargo.toml:10`
+- `crates/render-ansi/Cargo.toml:13`
+- `crates/render-ansi/Cargo.toml:14`
 - `crates/render-ansi/src/lib.rs:5`
 - `crates/render-ansi/src/lib.rs:14`
 - `crates/render-ansi/src/lib.rs:32`
@@ -118,6 +125,9 @@ Costs:
 - `crates/render-ansi/src/lib.rs:118`
 - `crates/render-ansi/src/lib.rs:163`
 - `crates/render-ansi/src/lib.rs:171`
+- `crates/render-ansi/src/lib.rs:421`
+- `crates/render-ansi/src/lib.rs:475`
+- `crates/render-ansi/src/lib.rs:497`
 - `crates/render-ansi/src/lib.rs:217`
 - `crates/render-ansi/src/lib.rs:238`
 - `crates/render-ansi/src/lib.rs:248`

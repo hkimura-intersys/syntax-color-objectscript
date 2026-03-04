@@ -1,0 +1,596 @@
+{
+  "styles": {
+    "@annotation": {
+      "fg": {
+        "r": 134,
+        "g": 225,
+        "b": 252
+      }
+    },
+    "@attribute": {
+      "fg": {
+        "r": 134,
+        "g": 225,
+        "b": 252
+      }
+    },
+    "@attribute.builtin": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@boolean": {
+      "fg": {
+        "r": 255,
+        "g": 150,
+        "b": 108
+      }
+    },
+    "@character": {
+      "fg": {
+        "r": 195,
+        "g": 232,
+        "b": 141
+      }
+    },
+    "@character.printf": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@character.special": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@comment": {
+      "fg": {
+        "r": 99,
+        "g": 109,
+        "b": 166
+      },
+      "italic": true
+    },
+    "@comment.error": {
+      "fg": {
+        "r": 197,
+        "g": 59,
+        "b": 83
+      }
+    },
+    "@comment.hint": {
+      "fg": {
+        "r": 79,
+        "g": 214,
+        "b": 190
+      }
+    },
+    "@comment.info": {
+      "fg": {
+        "r": 13,
+        "g": 185,
+        "b": 215
+      }
+    },
+    "@comment.note": {
+      "fg": {
+        "r": 79,
+        "g": 214,
+        "b": 190
+      }
+    },
+    "@comment.todo": {
+      "fg": {
+        "r": 130,
+        "g": 170,
+        "b": 255
+      }
+    },
+    "@comment.warning": {
+      "fg": {
+        "r": 255,
+        "g": 199,
+        "b": 119
+      }
+    },
+    "@constant": {
+      "fg": {
+        "r": 255,
+        "g": 150,
+        "b": 108
+      }
+    },
+    "@constant.builtin": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@constant.macro": {
+      "fg": {
+        "r": 134,
+        "g": 225,
+        "b": 252
+      }
+    },
+    "@constructor": {
+      "fg": {
+        "r": 192,
+        "g": 153,
+        "b": 255
+      }
+    },
+    "@constructor.tsx": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@diff.delta": {
+      "bg": {
+        "r": 37,
+        "g": 42,
+        "b": 63
+      }
+    },
+    "@diff.minus": {
+      "bg": {
+        "r": 58,
+        "g": 39,
+        "b": 58
+      }
+    },
+    "@diff.plus": {
+      "bg": {
+        "r": 39,
+        "g": 56,
+        "b": 73
+      }
+    },
+    "@function": {
+      "fg": {
+        "r": 130,
+        "g": 170,
+        "b": 255
+      }
+    },
+    "@function.builtin": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@function.call": {
+      "fg": {
+        "r": 130,
+        "g": 170,
+        "b": 255
+      }
+    },
+    "@function.macro": {
+      "fg": {
+        "r": 134,
+        "g": 225,
+        "b": 252
+      }
+    },
+    "@function.method": {
+      "fg": {
+        "r": 130,
+        "g": 170,
+        "b": 255
+      }
+    },
+    "@function.method.call": {
+      "fg": {
+        "r": 130,
+        "g": 170,
+        "b": 255
+      }
+    },
+    "@keyword": {
+      "fg": {
+        "r": 252,
+        "g": 167,
+        "b": 234
+      },
+      "italic": true
+    },
+    "@keyword.conditional": {
+      "fg": {
+        "r": 192,
+        "g": 153,
+        "b": 255
+      }
+    },
+    "@keyword.coroutine": {
+      "fg": {
+        "r": 252,
+        "g": 167,
+        "b": 234
+      },
+      "italic": true
+    },
+    "@keyword.debug": {
+      "fg": {
+        "r": 255,
+        "g": 150,
+        "b": 108
+      }
+    },
+    "@keyword.directive": {
+      "fg": {
+        "r": 134,
+        "g": 225,
+        "b": 252
+      }
+    },
+    "@keyword.directive.define": {
+      "fg": {
+        "r": 134,
+        "g": 225,
+        "b": 252
+      }
+    },
+    "@keyword.exception": {
+      "fg": {
+        "r": 192,
+        "g": 153,
+        "b": 255
+      }
+    },
+    "@keyword.function": {
+      "fg": {
+        "r": 192,
+        "g": 153,
+        "b": 255
+      }
+    },
+    "@keyword.import": {
+      "fg": {
+        "r": 134,
+        "g": 225,
+        "b": 252
+      }
+    },
+    "@keyword.operator": {
+      "fg": {
+        "r": 137,
+        "g": 221,
+        "b": 255
+      }
+    },
+    "@keyword.repeat": {
+      "fg": {
+        "r": 192,
+        "g": 153,
+        "b": 255
+      }
+    },
+    "@keyword.return": {
+      "fg": {
+        "r": 252,
+        "g": 167,
+        "b": 234
+      },
+      "italic": true
+    },
+    "@keyword.storage": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@label": {
+      "fg": {
+        "r": 130,
+        "g": 170,
+        "b": 255
+      }
+    },
+    "@markup": {},
+    "@module": {
+      "fg": {
+        "r": 130,
+        "g": 170,
+        "b": 255
+      }
+    },
+    "@module.builtin": {
+      "fg": {
+        "r": 255,
+        "g": 117,
+        "b": 127
+      }
+    },
+    "@namespace.builtin": {
+      "fg": {
+        "r": 255,
+        "g": 117,
+        "b": 127
+      }
+    },
+    "@none": {},
+    "@number": {
+      "fg": {
+        "r": 255,
+        "g": 150,
+        "b": 108
+      }
+    },
+    "@number.float": {
+      "fg": {
+        "r": 255,
+        "g": 150,
+        "b": 108
+      }
+    },
+    "@operator": {
+      "fg": {
+        "r": 137,
+        "g": 221,
+        "b": 255
+      }
+    },
+    "@property": {
+      "fg": {
+        "r": 79,
+        "g": 214,
+        "b": 190
+      }
+    },
+    "@punctuation": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@punctuation.bracket": {
+      "fg": {
+        "r": 130,
+        "g": 139,
+        "b": 184
+      }
+    },
+    "@punctuation.delimiter": {
+      "fg": {
+        "r": 137,
+        "g": 221,
+        "b": 255
+      }
+    },
+    "@punctuation.special": {
+      "fg": {
+        "r": 137,
+        "g": 221,
+        "b": 255
+      }
+    },
+    "@punctuation.special.markdown": {
+      "fg": {
+        "r": 255,
+        "g": 150,
+        "b": 108
+      }
+    },
+    "@string": {
+      "fg": {
+        "r": 195,
+        "g": 232,
+        "b": 141
+      }
+    },
+    "@string.documentation": {
+      "fg": {
+        "r": 255,
+        "g": 199,
+        "b": 119
+      }
+    },
+    "@string.escape": {
+      "fg": {
+        "r": 192,
+        "g": 153,
+        "b": 255
+      }
+    },
+    "@string.regexp": {
+      "fg": {
+        "r": 180,
+        "g": 249,
+        "b": 248
+      }
+    },
+    "@string.special": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@string.special.url": {
+      "underline": true
+    },
+    "@tag": {
+      "fg": {
+        "r": 192,
+        "g": 153,
+        "b": 255
+      }
+    },
+    "@tag.attribute": {
+      "fg": {
+        "r": 79,
+        "g": 214,
+        "b": 190
+      }
+    },
+    "@tag.builtin": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@tag.delimiter": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@tag.delimiter.tsx": {
+      "fg": {
+        "r": 101,
+        "g": 130,
+        "b": 195
+      }
+    },
+    "@tag.javascript": {
+      "fg": {
+        "r": 255,
+        "g": 117,
+        "b": 127
+      }
+    },
+    "@tag.tsx": {
+      "fg": {
+        "r": 255,
+        "g": 117,
+        "b": 127
+      }
+    },
+    "@type": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@type.builtin": {
+      "fg": {
+        "r": 88,
+        "g": 158,
+        "b": 215
+      }
+    },
+    "@type.definition": {
+      "fg": {
+        "r": 101,
+        "g": 188,
+        "b": 255
+      }
+    },
+    "@type.qualifier": {
+      "fg": {
+        "r": 252,
+        "g": 167,
+        "b": 234
+      },
+      "italic": true
+    },
+    "@variable": {
+      "fg": {
+        "r": 200,
+        "g": 211,
+        "b": 245
+      }
+    },
+    "@variable.builtin": {
+      "fg": {
+        "r": 255,
+        "g": 117,
+        "b": 127
+      }
+    },
+    "@variable.member": {
+      "fg": {
+        "r": 79,
+        "g": 214,
+        "b": 190
+      }
+    },
+    "@variable.parameter": {
+      "fg": {
+        "r": 255,
+        "g": 199,
+        "b": 119
+      }
+    },
+    "@variable.parameter.builtin": {
+      "fg": {
+        "r": 244,
+        "g": 201,
+        "b": 144
+      }
+    },
+    "error": {
+      "fg": {
+        "r": 197,
+        "g": 59,
+        "b": 83
+      }
+    },
+    "ignore": {
+      "fg": {
+        "r": 200,
+        "g": 211,
+        "b": 245
+      },
+      "bg": {
+        "r": 34,
+        "g": 36,
+        "b": 54
+      }
+    },
+    "normal": {
+      "fg": {
+        "r": 200,
+        "g": 211,
+        "b": 245
+      },
+      "bg": {
+        "r": 34,
+        "g": 36,
+        "b": 54
+      }
+    },
+    "selection": {
+      "bg": {
+        "r": 45,
+        "g": 63,
+        "b": 118
+      }
+    },
+    "statusline": {
+      "fg": {
+        "r": 130,
+        "g": 139,
+        "b": 184
+      },
+      "bg": {
+        "r": 30,
+        "g": 32,
+        "b": 48
+      }
+    },
+    "warning": {
+      "fg": {
+        "r": 255,
+        "g": 199,
+        "b": 119
+      }
+    }
+  }
+}

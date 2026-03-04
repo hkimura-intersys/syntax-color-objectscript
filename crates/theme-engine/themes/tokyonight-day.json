@@ -1,0 +1,596 @@
+{
+  "styles": {
+    "@annotation": {
+      "fg": {
+        "r": 0,
+        "g": 113,
+        "b": 151
+      }
+    },
+    "@attribute": {
+      "fg": {
+        "r": 0,
+        "g": 113,
+        "b": 151
+      }
+    },
+    "@attribute.builtin": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@boolean": {
+      "fg": {
+        "r": 177,
+        "g": 92,
+        "b": 0
+      }
+    },
+    "@character": {
+      "fg": {
+        "r": 88,
+        "g": 117,
+        "b": 57
+      }
+    },
+    "@character.printf": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@character.special": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@comment": {
+      "fg": {
+        "r": 132,
+        "g": 140,
+        "b": 181
+      },
+      "italic": true
+    },
+    "@comment.error": {
+      "fg": {
+        "r": 198,
+        "g": 67,
+        "b": 67
+      }
+    },
+    "@comment.hint": {
+      "fg": {
+        "r": 17,
+        "g": 140,
+        "b": 116
+      }
+    },
+    "@comment.info": {
+      "fg": {
+        "r": 7,
+        "g": 135,
+        "b": 157
+      }
+    },
+    "@comment.note": {
+      "fg": {
+        "r": 17,
+        "g": 140,
+        "b": 116
+      }
+    },
+    "@comment.todo": {
+      "fg": {
+        "r": 46,
+        "g": 125,
+        "b": 233
+      }
+    },
+    "@comment.warning": {
+      "fg": {
+        "r": 140,
+        "g": 108,
+        "b": 62
+      }
+    },
+    "@constant": {
+      "fg": {
+        "r": 177,
+        "g": 92,
+        "b": 0
+      }
+    },
+    "@constant.builtin": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@constant.macro": {
+      "fg": {
+        "r": 0,
+        "g": 113,
+        "b": 151
+      }
+    },
+    "@constructor": {
+      "fg": {
+        "r": 152,
+        "g": 84,
+        "b": 241
+      }
+    },
+    "@constructor.tsx": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@diff.delta": {
+      "bg": {
+        "r": 213,
+        "g": 217,
+        "b": 228
+      }
+    },
+    "@diff.minus": {
+      "bg": {
+        "r": 221,
+        "g": 202,
+        "b": 206
+      }
+    },
+    "@diff.plus": {
+      "bg": {
+        "r": 200,
+        "g": 214,
+        "b": 220
+      }
+    },
+    "@function": {
+      "fg": {
+        "r": 46,
+        "g": 125,
+        "b": 233
+      }
+    },
+    "@function.builtin": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@function.call": {
+      "fg": {
+        "r": 46,
+        "g": 125,
+        "b": 233
+      }
+    },
+    "@function.macro": {
+      "fg": {
+        "r": 0,
+        "g": 113,
+        "b": 151
+      }
+    },
+    "@function.method": {
+      "fg": {
+        "r": 46,
+        "g": 125,
+        "b": 233
+      }
+    },
+    "@function.method.call": {
+      "fg": {
+        "r": 46,
+        "g": 125,
+        "b": 233
+      }
+    },
+    "@keyword": {
+      "fg": {
+        "r": 120,
+        "g": 71,
+        "b": 189
+      },
+      "italic": true
+    },
+    "@keyword.conditional": {
+      "fg": {
+        "r": 152,
+        "g": 84,
+        "b": 241
+      }
+    },
+    "@keyword.coroutine": {
+      "fg": {
+        "r": 120,
+        "g": 71,
+        "b": 189
+      },
+      "italic": true
+    },
+    "@keyword.debug": {
+      "fg": {
+        "r": 177,
+        "g": 92,
+        "b": 0
+      }
+    },
+    "@keyword.directive": {
+      "fg": {
+        "r": 0,
+        "g": 113,
+        "b": 151
+      }
+    },
+    "@keyword.directive.define": {
+      "fg": {
+        "r": 0,
+        "g": 113,
+        "b": 151
+      }
+    },
+    "@keyword.exception": {
+      "fg": {
+        "r": 152,
+        "g": 84,
+        "b": 241
+      }
+    },
+    "@keyword.function": {
+      "fg": {
+        "r": 152,
+        "g": 84,
+        "b": 241
+      }
+    },
+    "@keyword.import": {
+      "fg": {
+        "r": 0,
+        "g": 113,
+        "b": 151
+      }
+    },
+    "@keyword.operator": {
+      "fg": {
+        "r": 0,
+        "g": 106,
+        "b": 131
+      }
+    },
+    "@keyword.repeat": {
+      "fg": {
+        "r": 152,
+        "g": 84,
+        "b": 241
+      }
+    },
+    "@keyword.return": {
+      "fg": {
+        "r": 120,
+        "g": 71,
+        "b": 189
+      },
+      "italic": true
+    },
+    "@keyword.storage": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@label": {
+      "fg": {
+        "r": 46,
+        "g": 125,
+        "b": 233
+      }
+    },
+    "@markup": {},
+    "@module": {
+      "fg": {
+        "r": 46,
+        "g": 125,
+        "b": 233
+      }
+    },
+    "@module.builtin": {
+      "fg": {
+        "r": 245,
+        "g": 42,
+        "b": 101
+      }
+    },
+    "@namespace.builtin": {
+      "fg": {
+        "r": 245,
+        "g": 42,
+        "b": 101
+      }
+    },
+    "@none": {},
+    "@number": {
+      "fg": {
+        "r": 177,
+        "g": 92,
+        "b": 0
+      }
+    },
+    "@number.float": {
+      "fg": {
+        "r": 177,
+        "g": 92,
+        "b": 0
+      }
+    },
+    "@operator": {
+      "fg": {
+        "r": 0,
+        "g": 106,
+        "b": 131
+      }
+    },
+    "@property": {
+      "fg": {
+        "r": 56,
+        "g": 112,
+        "b": 104
+      }
+    },
+    "@punctuation": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@punctuation.bracket": {
+      "fg": {
+        "r": 97,
+        "g": 114,
+        "b": 176
+      }
+    },
+    "@punctuation.delimiter": {
+      "fg": {
+        "r": 0,
+        "g": 106,
+        "b": 131
+      }
+    },
+    "@punctuation.special": {
+      "fg": {
+        "r": 0,
+        "g": 106,
+        "b": 131
+      }
+    },
+    "@punctuation.special.markdown": {
+      "fg": {
+        "r": 177,
+        "g": 92,
+        "b": 0
+      }
+    },
+    "@string": {
+      "fg": {
+        "r": 88,
+        "g": 117,
+        "b": 57
+      }
+    },
+    "@string.documentation": {
+      "fg": {
+        "r": 140,
+        "g": 108,
+        "b": 62
+      }
+    },
+    "@string.escape": {
+      "fg": {
+        "r": 152,
+        "g": 84,
+        "b": 241
+      }
+    },
+    "@string.regexp": {
+      "fg": {
+        "r": 46,
+        "g": 88,
+        "b": 87
+      }
+    },
+    "@string.special": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@string.special.url": {
+      "underline": true
+    },
+    "@tag": {
+      "fg": {
+        "r": 152,
+        "g": 84,
+        "b": 241
+      }
+    },
+    "@tag.attribute": {
+      "fg": {
+        "r": 56,
+        "g": 112,
+        "b": 104
+      }
+    },
+    "@tag.builtin": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@tag.delimiter": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@tag.delimiter.tsx": {
+      "fg": {
+        "r": 100,
+        "g": 155,
+        "b": 232
+      }
+    },
+    "@tag.javascript": {
+      "fg": {
+        "r": 245,
+        "g": 42,
+        "b": 101
+      }
+    },
+    "@tag.tsx": {
+      "fg": {
+        "r": 245,
+        "g": 42,
+        "b": 101
+      }
+    },
+    "@type": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@type.builtin": {
+      "fg": {
+        "r": 64,
+        "g": 148,
+        "b": 163
+      }
+    },
+    "@type.definition": {
+      "fg": {
+        "r": 24,
+        "g": 128,
+        "b": 146
+      }
+    },
+    "@type.qualifier": {
+      "fg": {
+        "r": 120,
+        "g": 71,
+        "b": 189
+      },
+      "italic": true
+    },
+    "@variable": {
+      "fg": {
+        "r": 55,
+        "g": 96,
+        "b": 191
+      }
+    },
+    "@variable.builtin": {
+      "fg": {
+        "r": 245,
+        "g": 42,
+        "b": 101
+      }
+    },
+    "@variable.member": {
+      "fg": {
+        "r": 56,
+        "g": 112,
+        "b": 104
+      }
+    },
+    "@variable.parameter": {
+      "fg": {
+        "r": 140,
+        "g": 108,
+        "b": 62
+      }
+    },
+    "@variable.parameter.builtin": {
+      "fg": {
+        "r": 123,
+        "g": 106,
+        "b": 88
+      }
+    },
+    "error": {
+      "fg": {
+        "r": 198,
+        "g": 67,
+        "b": 67
+      }
+    },
+    "ignore": {
+      "fg": {
+        "r": 55,
+        "g": 96,
+        "b": 191
+      },
+      "bg": {
+        "r": 225,
+        "g": 226,
+        "b": 231
+      }
+    },
+    "normal": {
+      "fg": {
+        "r": 55,
+        "g": 96,
+        "b": 191
+      },
+      "bg": {
+        "r": 225,
+        "g": 226,
+        "b": 231
+      }
+    },
+    "selection": {
+      "bg": {
+        "r": 183,
+        "g": 193,
+        "b": 227
+      }
+    },
+    "statusline": {
+      "fg": {
+        "r": 97,
+        "g": 114,
+        "b": 176
+      },
+      "bg": {
+        "r": 208,
+        "g": 213,
+        "b": 227
+      }
+    },
+    "warning": {
+      "fg": {
+        "r": 140,
+        "g": 108,
+        "b": 62
+      }
+    }
+  }
+}

@@ -10,3 +10,5 @@ readme = "README.md"
 highlight-spans = { version = "0.2.0", path = "../highlight-spans" }
 theme-engine = { version = "0.2.0", path = "../theme-engine" }
 thiserror = "1"
+unicode-segmentation = "1.12"
+unicode-width = "0.1"

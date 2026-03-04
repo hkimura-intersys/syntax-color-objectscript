@@ -67,15 +67,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Evidence
 
-- `crates/highlight-spans/src/lib.rs:49` (constructor)
-- `crates/highlight-spans/src/lib.rs:63` (highlight API)
-- `crates/highlight-spans/src/lib.rs:112` (line API)
-- `crates/highlight-spans/src/lib.rs:30` (result type)
+- `crates/highlight-spans/src/lib.rs:133` (constructor)
+- `crates/highlight-spans/src/lib.rs:228` (highlight API)
+- `crates/highlight-spans/src/lib.rs:309` (line API)
+- `crates/highlight-spans/src/lib.rs:86` (result type)
 
 ### Validation Notes
 
 - Verified signature against code: Yes
-- Verified usage in tests or examples: Yes (`crates/highlight-spans/src/lib.rs:161`)
+- Verified usage in tests or examples: Yes (`crates/highlight-spans/src/lib.rs:719`)
 - Mismatches or assumptions: None
 
 ## Example UX-002: Build and Resolve Themes with Fallback
@@ -145,17 +145,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Evidence
 
-- `crates/theme-engine/src/lib.rs:134` (JSON loader)
-- `crates/theme-engine/src/lib.rs:117` (resolve behavior)
-- `crates/theme-engine/src/lib.rs:125` (dotted fallback)
-- `crates/theme-engine/src/lib.rs:160` (built-in loader)
-- `crates/theme-engine/src/lib.rs:298` (alias test)
+- `crates/theme-engine/src/lib.rs:160` (JSON loader)
+- `crates/theme-engine/src/lib.rs:136` (resolve behavior)
+- `crates/theme-engine/src/lib.rs:144` (dotted fallback)
+- `crates/theme-engine/src/lib.rs:207` (built-in loader)
+- `crates/theme-engine/src/lib.rs:357` (alias test)
 
 ### Validation Notes
 
 - Verified signature against code: Yes
-- Verified usage in tests or examples: Yes (`crates/theme-engine/src/lib.rs:240`, `crates/theme-engine/src/lib.rs:298`)
-- Mismatches or assumptions: Assumes `normal` exists in selected theme (`crates/theme-engine/src/lib.rs:131`)
+- Verified usage in tests or examples: Yes (`crates/theme-engine/src/lib.rs:294`, `crates/theme-engine/src/lib.rs:357`)
+- Mismatches or assumptions: Assumes `normal` exists in selected theme (`crates/theme-engine/src/lib.rs:150`)
 
 ## Example UX-003: End-to-End ANSI Rendering Pipeline
 
@@ -222,16 +222,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Evidence
 
-- `crates/render-ansi/src/lib.rs:118` (orchestration API)
-- `crates/render-ansi/src/lib.rs:133` (highlight call)
-- `crates/render-ansi/src/lib.rs:134` (style resolution)
-- `crates/render-ansi/src/lib.rs:138` (line API)
-- `crates/render-ansi/src/lib.rs:98` (line clipping)
+- `crates/render-ansi/src/lib.rs:343` (orchestration API)
+- `crates/render-ansi/src/lib.rs:363` (highlight call)
+- `crates/render-ansi/src/lib.rs:364` (style resolution)
+- `crates/render-ansi/src/lib.rs:375` (line API)
+- `crates/render-ansi/src/lib.rs:316` (line clipping)
 
 ### Validation Notes
 
 - Verified signature against code: Yes
-- Verified usage in tests or examples: Yes (`crates/render-ansi/src/lib.rs:300`, `crates/render-ansi/src/lib.rs:318`)
+- Verified usage in tests or examples: Yes (`crates/render-ansi/src/lib.rs:749`, `crates/render-ansi/src/lib.rs:768`)
 - Mismatches or assumptions: None
 
 ## Example UX-004: Incremental VT Patches for IRIS SQL Terminal Updates
@@ -248,7 +248,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Prerequisites
 
 - Dependencies: `render-ansi`, `highlight-spans`, `theme-engine`.
-- Config: Terminal width/height for viewport clipping; theme name; grammar (`sql` for SQL shell content).
+- Config: Terminal width/height for viewport clipping; terminal origin row/col offset; theme name; grammar (`sql` for SQL shell content).
 - Permissions: Ability to write VT escape sequences to terminal stdout.
 
 ### Example (Minimal)
@@ -273,13 +273,16 @@ EOF
 cargo run -p render-ansi --example vt_patch_bridge -- \
   /tmp/iris-new.sql tokyonight-dark sql \
   --prev /tmp/iris-old.sql \
-  --width 120 --height 40
+  --width 120 --height 40 \
+  --origin-row 4 --origin-col 7
 ```
 
 **Explanation:**
 1. `--prev` seeds the incremental renderer with the prior terminal snapshot.
-2. The bridge highlights `iris-new.sql` and diffs it against previous styled cells.
-3. Output is a VT patch (cursor-move + style + erase sequences), not a full-frame render.
+2. `--origin-row/--origin-col` shift emitted cursor coordinates to the editable region (for example after a prompt).
+3. The bridge highlights `iris-new.sql` and diffs it against previous styled cells.
+4. Output is a VT patch (cursor-move + style + erase sequences), not a full-frame render.
+5. Column movement uses display width (grapheme-aware), not raw byte count.
 
 ### Example (Advanced)
 
@@ -296,6 +299,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let theme = load_theme("tokyonight-dark")?;
     let mut highlighter = SpanHighlighter::new()?;
     let mut sessions = IncrementalSessionManager::new(120, 40);
+    sessions.ensure_session("iris-A").set_origin(4, 7);
+    sessions.ensure_session("iris-B").set_origin(4, 7);
 
     // Replace with your multiplexed terminal event stream.
     let events = vec![
@@ -326,22 +331,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 **Explanation:**
 1. `IncrementalSessionManager` keeps one incremental renderer per session ID.
-2. `highlight_to_patch_for_session` runs parse + theme + diff against that session's prior frame only.
-3. Empty patch means no write is needed for that specific IRIS terminal.
+2. Session renderers can be configured with per-session origin offsets.
+3. `highlight_to_patch_for_session` runs parse + theme + diff against that session's prior frame only.
+4. Empty patch means no write is needed for that specific IRIS terminal.
 
 ### Evidence
 
-- `crates/render-ansi/src/lib.rs:26` (`IncrementalRenderer` state)
-- `crates/render-ansi/src/lib.rs:78` (`IncrementalSessionManager`)
-- `crates/render-ansi/src/lib.rs:137` (`highlight_to_patch_for_session`)
-- `crates/render-ansi/src/lib.rs:355` (diff-to-patch implementation)
-- `crates/render-ansi/examples/vt_patch_bridge.rs:100` (CLI usage and flags)
-- `crates/render-ansi/src/lib.rs:654` (session-isolation test)
+- `crates/render-ansi/src/lib.rs:30` (`IncrementalRenderer` state)
+- `crates/render-ansi/src/lib.rs:70` (`set_origin`)
+- `crates/render-ansi/src/lib.rs:125` (`IncrementalSessionManager`)
+- `crates/render-ansi/src/lib.rs:202` (`highlight_to_patch_for_session`)
+- `crates/render-ansi/src/lib.rs:497` (display-width diff-to-patch implementation)
+- `crates/render-ansi/examples/vt_patch_bridge.rs:131` (CLI usage and flags)
+- `crates/render-ansi/src/lib.rs:880` (session-isolation test)
+- `crates/render-ansi/src/lib.rs:816` (wide-grapheme display-width test)
 
 ### Validation Notes
 
 - Verified signature against code: Yes
-- Verified usage in tests or examples: Yes (`crates/render-ansi/examples/vt_patch_bridge.rs:116`, `crates/render-ansi/src/lib.rs:654`)
+- Verified usage in tests or examples: Yes (`crates/render-ansi/examples/vt_patch_bridge.rs:155`, `crates/render-ansi/src/lib.rs:799`)
 - Mismatches or assumptions: Assumes your IRIS host captures a clean text snapshot per update cycle.
 
 ## Doc/Code Mismatches
