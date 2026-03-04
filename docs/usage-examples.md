@@ -234,6 +234,116 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - Verified usage in tests or examples: Yes (`crates/render-ansi/src/lib.rs:300`, `crates/render-ansi/src/lib.rs:318`)
 - Mismatches or assumptions: None
 
+## Example UX-004: Incremental VT Patches for IRIS SQL Terminal Updates
+
+**Audience:** Developers integrating syntax-coloring into an interactive IRIS terminal workflow.
+**Topic:** How to emit ANSI/VT patch updates instead of repainting the full frame.
+**Goal:** Update only changed regions when SQL command text changes between terminal snapshots.
+
+### Context
+
+- When to use it: You maintain terminal state between edits and want low-latency redraws.
+- When not to use it: You only need one-shot output (for example logs or static previews).
+
+### Prerequisites
+
+- Dependencies: `render-ansi`, `highlight-spans`, `theme-engine`.
+- Config: Terminal width/height for viewport clipping; theme name; grammar (`sql` for SQL shell content).
+- Permissions: Ability to write VT escape sequences to terminal stdout.
+
+### Example (Minimal)
+
+**Introduction:** This example simulates two IRIS SQL shell snapshots and emits only the patch from old to new.
+
+```bash
+cat > /tmp/iris-old.sql <<'EOF'
+SELECT Name, DOB
+FROM Sample.Person
+WHERE Home_State = :state
+ORDER BY Name
+EOF
+
+cat > /tmp/iris-new.sql <<'EOF'
+SELECT Name
+FROM Sample.Person
+WHERE Home_State = :state
+ORDER BY Name
+EOF
+
+cargo run -p render-ansi --example vt_patch_bridge -- \
+  /tmp/iris-new.sql tokyonight-dark sql \
+  --prev /tmp/iris-old.sql \
+  --width 120 --height 40
+```
+
+**Explanation:**
+1. `--prev` seeds the incremental renderer with the prior terminal snapshot.
+2. The bridge highlights `iris-new.sql` and diffs it against previous styled cells.
+3. Output is a VT patch (cursor-move + style + erase sequences), not a full-frame render.
+
+### Example (Advanced)
+
+**Introduction:** This example shows a host loop that tracks multiple IRIS terminal sessions concurrently, with isolated incremental state per session.
+
+```rust
+use std::io::{self, Write};
+
+use highlight_spans::{Grammar, SpanHighlighter};
+use render_ansi::IncrementalSessionManager;
+use theme_engine::load_theme;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let theme = load_theme("tokyonight-dark")?;
+    let mut highlighter = SpanHighlighter::new()?;
+    let mut sessions = IncrementalSessionManager::new(120, 40);
+
+    // Replace with your multiplexed terminal event stream.
+    let events = vec![
+        ("iris-A", "SELECT Name, DOB\nFROM Sample.Person\n"),
+        ("iris-B", "SELECT ID, Name\nFROM Sample.Person\n"),
+        ("iris-A", "SELECT Name\nFROM Sample.Person\n"),
+    ];
+
+    for (session_id, snapshot) in events {
+        let patch = sessions.highlight_to_patch_for_session(
+            session_id,
+            &mut highlighter,
+            snapshot.as_bytes(),
+            Grammar::Sql,
+            &theme,
+        )?;
+        if !patch.is_empty() {
+            // Route to the matching terminal for this IRIS instance.
+            // write_to_terminal(session_id, patch.as_bytes())?;
+            print!("{patch}");
+            io::stdout().flush()?;
+        }
+    }
+
+    Ok(())
+}
+```
+
+**Explanation:**
+1. `IncrementalSessionManager` keeps one incremental renderer per session ID.
+2. `highlight_to_patch_for_session` runs parse + theme + diff against that session's prior frame only.
+3. Empty patch means no write is needed for that specific IRIS terminal.
+
+### Evidence
+
+- `crates/render-ansi/src/lib.rs:26` (`IncrementalRenderer` state)
+- `crates/render-ansi/src/lib.rs:78` (`IncrementalSessionManager`)
+- `crates/render-ansi/src/lib.rs:137` (`highlight_to_patch_for_session`)
+- `crates/render-ansi/src/lib.rs:355` (diff-to-patch implementation)
+- `crates/render-ansi/examples/vt_patch_bridge.rs:100` (CLI usage and flags)
+- `crates/render-ansi/src/lib.rs:654` (session-isolation test)
+
+### Validation Notes
+
+- Verified signature against code: Yes
+- Verified usage in tests or examples: Yes (`crates/render-ansi/examples/vt_patch_bridge.rs:116`, `crates/render-ansi/src/lib.rs:654`)
+- Mismatches or assumptions: Assumes your IRIS host captures a clean text snapshot per update cycle.
+
 ## Doc/Code Mismatches
 
 - No mismatches found in the documented examples versus current source/test definitions.

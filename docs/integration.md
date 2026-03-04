@@ -36,6 +36,37 @@ cargo run
 
 Use `highlight_lines_to_ansi_lines(...)` when your terminal UI redraws line-by-line.
 
+### Optional: incremental VT patch output for interactive IRIS sessions
+
+Use `IncrementalRenderer` (or the `vt_patch_bridge` example) when you want to update only changed regions.
+
+```bash
+# old and new SQL command snapshots from your IRIS terminal host
+cat > /tmp/iris-old.sql <<'EOF'
+SELECT Name, DOB
+FROM Sample.Person
+WHERE Home_State = :state
+ORDER BY Name
+EOF
+
+cat > /tmp/iris-new.sql <<'EOF'
+SELECT Name
+FROM Sample.Person
+WHERE Home_State = :state
+ORDER BY Name
+EOF
+
+# emit VT patch from old -> new
+cargo run -p render-ansi --example vt_patch_bridge -- \
+  /tmp/iris-new.sql tokyonight-dark sql \
+  --prev /tmp/iris-old.sql \
+  --width 120 --height 40
+```
+
+Output is a patch stream (cursor movement + SGR + erase), not a full-frame redraw.
+
+If you multiplex multiple IRIS terminals in one host process, prefer `IncrementalSessionManager` so each terminal ID keeps isolated prior-frame state.
+
 ## 2) With a native C engine (no ANSI renderer)
 
 ### Step 1: Add dependencies
@@ -217,6 +248,7 @@ The key point is that `attr_id` is translated to a capture name via `result.attr
 Source:
 
 - `crates/render-ansi/examples/zedit_bridge.rs`
+- `crates/render-ansi/examples/vt_patch_bridge.rs`
 
 Run:
 
@@ -233,3 +265,9 @@ cargo run -p render-ansi --example zedit_bridge -- /path/to/file.cls solarized-d
 Output format (one line per paint op):
 
 `start end fg_r fg_g fg_b bg_r bg_g bg_b flags`
+
+For VT patch output instead of paint ops:
+
+```bash
+cargo run -p render-ansi --example vt_patch_bridge -- /path/to/file.sql tokyonight-dark sql
+```

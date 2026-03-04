@@ -3,6 +3,7 @@ use std::error::Error;
 use std::fs;
 
 use highlight_spans::{Grammar, SpanHighlighter};
+use render_ansi::resolve_styled_spans;
 use theme_engine::{load_theme, Rgb, Style, Theme};
 
 const FLAG_BOLD: u8 = 0b0001;
@@ -89,22 +90,16 @@ fn build_c_paint_ops(
     theme: &Theme,
     highlighter: &mut SpanHighlighter,
 ) -> Result<Vec<CPaintOp>, Box<dyn Error>> {
-    let result = highlighter.highlight(source, grammar)?;
-
+    let highlight = highlighter.highlight(source, grammar)?;
+    let styled = resolve_styled_spans(&highlight, theme)?;
     let normal = theme.resolve("normal").copied().unwrap_or(Style {
         fg: Some(Rgb::new(220, 220, 220)),
         ..Style::default()
     });
 
-    let mut ops = Vec::with_capacity(result.spans.len());
-    for span in &result.spans {
-        let capture = result
-            .attrs
-            .get(span.attr_id)
-            .map(|a| a.capture_name.as_str())
-            .unwrap_or("normal");
-
-        let resolved = merge_with_normal(theme.resolve(capture).copied(), normal);
+    let mut ops = Vec::with_capacity(styled.len());
+    for span in styled {
+        let resolved = merge_with_normal(span.style, normal);
         let op = style_to_c_op(span.start_byte, span.end_byte, resolved)?;
         ops.push(op);
     }

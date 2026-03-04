@@ -7,6 +7,11 @@
 - End-to-end helpers:
   - `highlight_to_ansi(...) -> String`
   - `highlight_lines_to_ansi_lines(...) -> Vec<String>`
+- Incremental patching:
+  - `IncrementalRenderer::new(width, height)`
+  - `IncrementalRenderer::render_patch(source, spans) -> String`
+  - `IncrementalRenderer::highlight_to_patch(...) -> String`
+  - `IncrementalSessionManager::new(default_width, default_height)` for multi-terminal/per-session state
 - Low-level render helpers:
   - `resolve_styled_spans(...)`
   - `render_ansi(...)`
@@ -31,3 +36,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 - Use this crate when you want terminal-ready ANSI output.
 - If you have your own paint engine (for example native C/TUI), use `highlight-spans` + `theme-engine` directly and skip ANSI rendering.
+
+## Examples
+
+- `show_highlight`: full-frame ANSI render for a file.
+- `zedit_bridge`: machine-readable paint ops (`start end fg_r fg_g fg_b bg_r bg_g bg_b flags`).
+- `vt_patch_bridge`: incremental VT patch output using `IncrementalRenderer`.
