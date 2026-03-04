@@ -1,6 +1,6 @@
 # highlight-spans
 
-`highlight-spans` parses ObjectScript source with Tree-sitter and returns semantic highlight ranges as `(attr_id, start_byte, end_byte)` spans plus an attribute table.
+`highlight-spans` parses source with Tree-sitter and returns semantic highlight ranges as `(attr_id, start_byte, end_byte)` spans plus an attribute table.
 
 ## What You Get
 
@@ -8,8 +8,12 @@
 - `HighlightResult { attrs, spans }` where:
   - `attrs` maps `attr_id -> capture_name`
   - `spans` contains byte ranges tagged by `attr_id`
-- `Grammar` variant:
-  - `ObjectScript` (backed by `LANGUAGE_OBJECTSCRIPT_PLAYGROUND`)
+- `Grammar` variants:
+  - `ObjectScript`
+  - `Sql` (using vendored `DerekStride/tree-sitter-sql` grammar/query assets)
+  - `Python`
+  - `Markdown` (using `tree-sitter-md` block+inline grammar/query constants)
+  - `Mdx` (temporary fallback: uses SQL highlighting)
 
 ## Quick Example
 

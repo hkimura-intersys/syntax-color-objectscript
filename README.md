@@ -1,6 +1,6 @@
 # syntax-color-objectscript
 
-Workspace for ObjectScript syntax coloring with a clean split between:
+Workspace for syntax coloring with a clean split between:
 
 - syntax analysis (`highlight-spans`)
 - style selection (`theme-engine`)
@@ -42,15 +42,19 @@ docs/
 
 Purpose:
 
-- Convert ObjectScript text into `(attr_id, start_byte, end_byte)` spans.
+- Convert source text (ObjectScript/SQL/Python/Markdown/MDX) into `(attr_id, start_byte, end_byte)` spans.
 - Return an attribute table mapping `attr_id -> capture_name`.
+- Treat `mdx` as a temporary alias to SQL highlighting (for InterSystems MDX content).
 - [Crate README](crates/highlight-spans/README.md)
 
 Depends on:
 
 - `tree-sitter-objectscript = "1.4.0"`
+- `tree-sitter-python = "0.25.0"`
+- `tree-sitter-md = "0.5.3"`
 - `tree-sitter-highlight = ">=0.26.6"`
 - `tree-sitter = ">=0.26.6"`
+- bundled SQL grammar from `DerekStride/tree-sitter-sql` (`vendor/tree-sitter-sql/src/*`, `vendor/tree-sitter-sql/queries/highlights.scm`)
 
 ### `theme-engine`
 

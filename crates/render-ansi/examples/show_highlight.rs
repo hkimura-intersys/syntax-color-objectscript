@@ -7,17 +7,13 @@ use render_ansi::highlight_to_ansi;
 use theme_engine::load_theme;
 
 fn parse_grammar(input: &str) -> Result<Grammar, String> {
-    match input.trim().to_ascii_lowercase().as_str() {
-        "objectscript"
-        | "os"
-        | "playground"
-        | "objectscriptplayground"
-        | "objectscript_playground" => Ok(Grammar::ObjectScript),
-        _ => Err(format!(
-            "unknown grammar '{}'; use objectscript (aliases: os, objectscript_playground, playground)",
-            input
-        )),
-    }
+    Grammar::from_name(input).ok_or_else(|| {
+        format!(
+            "unknown grammar '{}'; use one of: {}",
+            input,
+            Grammar::supported_names().join(", ")
+        )
+    })
 }
 
 fn print_usage() {
@@ -30,6 +26,9 @@ fn print_usage() {
     eprintln!("  cargo run -p render-ansi --example show_highlight -- sample.cls");
     eprintln!(
         "  cargo run -p render-ansi --example show_highlight -- sample.cls solarized-dark objectscript"
+    );
+    eprintln!(
+        "  cargo run -p render-ansi --example show_highlight -- sample.sql tokyonight-dark sql"
     );
 }
 

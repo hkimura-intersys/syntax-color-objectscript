@@ -21,7 +21,7 @@ use theme_engine::load_theme;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let theme = load_theme("tokyonight-dark")?;
-    let out = highlight_to_ansi(b"set x = 42", Grammar::ObjectScript, &theme)?;
+    let out = highlight_to_ansi(b"SELECT 42", Grammar::Sql, &theme)?;
     println!("{out}");
     Ok(())
 }

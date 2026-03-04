@@ -25,17 +25,13 @@ pub struct CPaintOp {
 }
 
 fn parse_grammar(input: &str) -> Result<Grammar, String> {
-    match input.trim().to_ascii_lowercase().as_str() {
-        "objectscript"
-        | "os"
-        | "playground"
-        | "objectscriptplayground"
-        | "objectscript_playground" => Ok(Grammar::ObjectScript),
-        _ => Err(format!(
-            "unknown grammar '{}'; use objectscript (aliases: os, objectscript_playground, playground)",
-            input
-        )),
-    }
+    Grammar::from_name(input).ok_or_else(|| {
+        format!(
+            "unknown grammar '{}'; use one of: {}",
+            input,
+            Grammar::supported_names().join(", ")
+        )
+    })
 }
 
 fn merge_with_normal(style: Option<Style>, normal: Style) -> Style {
@@ -127,6 +123,7 @@ fn print_usage() {
     eprintln!(
         "  cargo run -p render-ansi --example zedit_bridge -- sample.mac solarized-dark objectscript"
     );
+    eprintln!("  cargo run -p render-ansi --example zedit_bridge -- sample.sql solarized-dark sql");
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
