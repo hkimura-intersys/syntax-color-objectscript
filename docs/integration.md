@@ -40,6 +40,9 @@ Use `highlight_lines_to_ansi_lines(...)` when your terminal UI redraws line-by-l
 
 Use `IncrementalRenderer` (or the `vt_patch_bridge` example) when you want to update only changed regions.
 Set an origin offset when your editable region starts after a prompt.
+In IRIS, Direct mode and SQL shell are sequential `READ` loops, so keep one renderer for the
+active `READ`, switch grammar from your `$ZU()` mode signal, and call `clear_state()` when a new
+`READ` starts.
 For a full end-to-end walkthrough, see `docs/incremental-terminal-highlighting.md`.
 
 ```bash
@@ -69,7 +72,12 @@ cargo run -p render-ansi --example vt_patch_bridge -- \
 Output is a patch stream (cursor movement + SGR + erase), not a full-frame redraw.
 Patch columns are display-width based (grapheme-aware), so wide Unicode and tabs do not use raw-byte offsets.
 
-If you multiplex multiple IRIS terminals in one host process, prefer `IncrementalSessionManager` so each terminal ID keeps isolated prior-frame state.
+If you multiplex independent PTYs/connections in one host process, keep a
+`HashMap<String, IncrementalRenderer>` so each terminal ID keeps isolated prior-frame state.
+
+If terminal width/wrap cannot be trusted, use `StreamLineRenderer` for line-local
+relative updates (no absolute XY), or switch to full-frame rerender with
+`highlight_to_ansi(...)`.
 
 ## 2) With a native C engine (no ANSI renderer)
 

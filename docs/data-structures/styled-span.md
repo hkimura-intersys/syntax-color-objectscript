@@ -52,7 +52,7 @@
 
 - Produced by `resolve_styled_spans` (`crates/render-ansi/src/lib.rs:238`).
 - Consumed by `render_ansi`, `render_ansi_lines`, `render_patch`, and `highlight_to_patch` (`crates/render-ansi/src/lib.rs:89`, `crates/render-ansi/src/lib.rs:111`, `crates/render-ansi/src/lib.rs:264`, `crates/render-ansi/src/lib.rs:295`).
-- Session-scoped incremental usage is available through `IncrementalSessionManager::highlight_to_patch_for_session` (`crates/render-ansi/src/lib.rs:202`).
+- For multiplexed terminals, keep session-scoped incremental state in your host (for example `HashMap<String, IncrementalRenderer>`) and call `IncrementalRenderer::highlight_to_patch` per terminal ID (`crates/render-ansi/src/lib.rs:167`).
 
 ## Usage Examples
 

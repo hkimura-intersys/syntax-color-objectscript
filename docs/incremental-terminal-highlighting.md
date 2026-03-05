@@ -89,39 +89,106 @@ Notes:
 - Next calls emit only deltas.
 - If no visual change: patch is empty.
 
-## Exact Usage: Multiple IRIS Sessions
+## Exact Usage: IRIS READ Lifecycle (Direct + SQL Shell)
 
-Use one renderer state per terminal session:
+In IRIS, Direct mode and SQL shell input are sequential `READ` loops, not concurrent
+editable sessions. A `READ` completes on ENTER, then the next `READ` starts afterward
+(often a few milliseconds later). Keep one renderer for the active `READ`, and pick
+grammar from your `$ZU()` mode signal (`DIRECT` vs SQL).
 
 ```rust
 use highlight_spans::{Grammar, SpanHighlighter};
-use render_ansi::IncrementalSessionManager;
+use render_ansi::IncrementalRenderer;
+use theme_engine::load_theme;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum IrisReadMode {
+    Direct,
+    SqlShell,
+}
+
+fn grammar_for_mode(mode: IrisReadMode) -> Grammar {
+    match mode {
+        IrisReadMode::Direct => Grammar::ObjectScript,
+        IrisReadMode::SqlShell => Grammar::Sql,
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut highlighter = SpanHighlighter::new()?;
+    let theme = load_theme("tokyonight-dark")?;
+    let mut renderer = IncrementalRenderer::new(120, 40);
+    let mut active_read_id: Option<u64> = None;
+
+    // `mode` comes from `$ZU()` at READ start.
+    let events = vec![
+        (10_u64, IrisReadMode::Direct, "set x = 2\n"),
+        (10_u64, IrisReadMode::Direct, "set x = 23\n"),
+        // Previous READ completed on ENTER; SQL shell READ starts next.
+        (11_u64, IrisReadMode::SqlShell, "SELECT Name, DOB\n"),
+        (11_u64, IrisReadMode::SqlShell, "SELECT Name\n"),
+    ];
+
+    for (read_id, mode, snapshot) in events {
+        if active_read_id != Some(read_id) {
+            active_read_id = Some(read_id);
+            renderer.clear_state(); // do not diff across different READ lifecycles
+            renderer.set_origin(4, 7); // set prompt-relative origin for this READ
+        }
+
+        let patch = renderer.highlight_to_patch(
+            &mut highlighter,
+            snapshot.as_bytes(),
+            grammar_for_mode(mode),
+            &theme,
+        )?;
+        if !patch.is_empty() {
+            // Write patch to the same IRIS PTY.
+        }
+    }
+
+    Ok(())
+}
+```
+
+## Exact Usage: Multiple Terminal PTYs (Manual State Map)
+
+If your host multiplexes independent PTYs/connections, keep one
+`IncrementalRenderer` per terminal ID in your own map.
+
+```rust
+use std::collections::HashMap;
+
+use highlight_spans::{Grammar, SpanHighlighter};
+use render_ansi::IncrementalRenderer;
 use theme_engine::load_theme;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut highlighter = SpanHighlighter::new()?;
     let theme = load_theme("tokyonight-dark")?;
-    let mut sessions = IncrementalSessionManager::new(120, 40);
-
-    sessions.ensure_session("iris-a").set_origin(4, 7);
-    sessions.ensure_session("iris-b").set_origin(4, 7);
+    let mut renderers: HashMap<String, IncrementalRenderer> = HashMap::new();
 
     let events = vec![
-        ("iris-a", "set x = 2\n"),
-        ("iris-b", "set y = 10\n"),
-        ("iris-a", "set x = 23\n"),
+        ("pty-a", "set x = 2\n"),
+        ("pty-b", "set y = 10\n"),
+        ("pty-a", "set x = 23\n"),
     ];
 
-    for (session_id, snapshot) in events {
-        let patch = sessions.highlight_to_patch_for_session(
-            session_id,
+    for (pty_id, snapshot) in events {
+        let renderer = renderers.entry(pty_id.to_string()).or_insert_with(|| {
+            let mut r = IncrementalRenderer::new(120, 40);
+            r.set_origin(4, 7);
+            r
+        });
+
+        let patch = renderer.highlight_to_patch(
             &mut highlighter,
             snapshot.as_bytes(),
             Grammar::ObjectScript,
             &theme,
         )?;
         if !patch.is_empty() {
-            // Write patch to the matching terminal session PTY.
+            // Write patch to the matching PTY.
         }
     }
 
@@ -173,13 +240,55 @@ cargo run -q -p render-ansi --example vt_patch_bridge -- \
 
 ## Using This in a Live IRIS Terminal Loop
 
-1. Track one renderer per IRIS PTY/session.
-2. Set initial `width`, `height`, and `origin`.
-3. For each user edit or prompt refresh, capture the current editable snapshot.
-4. Call `highlight_to_patch(...)` / `highlight_to_patch_for_session(...)`.
+1. Track one `IncrementalRenderer` for the active IRIS `READ`.
+2. At each `READ` start, inspect your `$ZU()` mode signal and map it to grammar (`DIRECT` -> `ObjectScript`, SQL shell -> `Sql`).
+3. On `READ` boundary (ENTER completed one loop, next loop starts), call `renderer.clear_state()`, then set `origin`.
+4. For each prompt refresh/edit within that `READ`, capture the current snapshot and call `highlight_to_patch(...)`.
 5. Write returned patch bytes to the same PTY.
 6. On resize: call `renderer.resize(new_width, new_height)`.
-7. On full screen clear/repaint by host: call `renderer.clear_state()` and re-prime.
+7. If you truly multiplex multiple PTYs, keep a `HashMap<String, IncrementalRenderer>` keyed by PTY/session ID.
+
+## Fallback: Width-Independent Single-Line Patches
+
+If terminal width is unknown or unreliable, use `StreamLineRenderer` for a single
+editable line. It diffs with relative cursor-left (`CUB`) + overwrite + optional
+erase-to-end-of-line (`EL`) and avoids absolute XY movement.
+
+```rust
+use highlight_spans::{Grammar, SpanHighlighter};
+use render_ansi::StreamLineRenderer;
+use theme_engine::load_theme;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut highlighter = SpanHighlighter::new()?;
+    let theme = load_theme("tokyonight-dark")?;
+    let mut renderer = StreamLineRenderer::new();
+
+    let _ = renderer.highlight_line_to_patch(
+        &mut highlighter,
+        b"SELECT Name FROM Sample.Person",
+        Grammar::Sql,
+        &theme,
+    )?;
+    let patch = renderer.highlight_line_to_patch(
+        &mut highlighter,
+        b"SELECT ID FROM Sample.Person",
+        Grammar::Sql,
+        &theme,
+    )?;
+
+    if !patch.is_empty() {
+        // Write patch to the same line/terminal stream.
+    }
+    Ok(())
+}
+```
+
+Notes:
+
+- `StreamLineRenderer` expects single-line input (no `\n`).
+- Cursor must remain at end-of-line between updates.
+- This mode is safer for unknown wrap behavior but only supports line-local updates.
 
 ## How To Determine Origin (`row`, `col`)
 
@@ -196,4 +305,6 @@ Origin must be terminal-global coordinates for where your editable buffer begins
 - Running incremental patch output directly in your normal shell prompt can overwrite visible prompt/history text. Use a controlled region/PTY.
 - Byte offsets from parsers are not terminal columns. Incremental renderer already converts to display-width columns.
 - If host wrap behavior differs from your provided `width`, patches can drift.
-- If a session is redrawn externally without telling the renderer, call `clear_state()` to resynchronize.
+- If you diff across different IRIS `READ` lifecycles (for example Direct -> SQL shell) without `clear_state()`, patch output can drift.
+- If a screen region is redrawn externally without telling the renderer, call `clear_state()` to resynchronize.
+- If you cannot trust terminal width/wrap, prefer `StreamLineRenderer` (line-local mode) or full-frame rerender with `highlight_to_ansi`.

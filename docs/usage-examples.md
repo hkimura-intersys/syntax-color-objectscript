@@ -286,40 +286,57 @@ cargo run -p render-ansi --example vt_patch_bridge -- \
 
 ### Example (Advanced)
 
-**Introduction:** This example shows a host loop that tracks multiple IRIS terminal sessions concurrently, with isolated incremental state per session.
+**Introduction:** This example models IRIS Direct mode and SQL shell as sequential `READ` loops in one PTY. It resets incremental state at each `READ` boundary, then selects grammar from mode (`$ZU()` signal).
 
 ```rust
 use std::io::{self, Write};
 
 use highlight_spans::{Grammar, SpanHighlighter};
-use render_ansi::IncrementalSessionManager;
+use render_ansi::IncrementalRenderer;
 use theme_engine::load_theme;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum IrisMode {
+    Direct,
+    SqlShell,
+}
+
+fn grammar_for_mode(mode: IrisMode) -> Grammar {
+    match mode {
+        IrisMode::Direct => Grammar::ObjectScript,
+        IrisMode::SqlShell => Grammar::Sql,
+    }
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let theme = load_theme("tokyonight-dark")?;
     let mut highlighter = SpanHighlighter::new()?;
-    let mut sessions = IncrementalSessionManager::new(120, 40);
-    sessions.ensure_session("iris-A").set_origin(4, 7);
-    sessions.ensure_session("iris-B").set_origin(4, 7);
+    let mut renderer = IncrementalRenderer::new(120, 40);
+    let mut active_read_id: Option<u64> = None;
 
-    // Replace with your multiplexed terminal event stream.
+    // Replace with host events. `mode` is sampled from `$ZU()` when each READ starts.
     let events = vec![
-        ("iris-A", "SELECT Name, DOB\nFROM Sample.Person\n"),
-        ("iris-B", "SELECT ID, Name\nFROM Sample.Person\n"),
-        ("iris-A", "SELECT Name\nFROM Sample.Person\n"),
+        (100_u64, IrisMode::Direct, "set x = 2\n"),
+        (100_u64, IrisMode::Direct, "set x = 23\n"),
+        (101_u64, IrisMode::SqlShell, "SELECT Name, DOB\nFROM Sample.Person\n"),
+        (101_u64, IrisMode::SqlShell, "SELECT Name\nFROM Sample.Person\n"),
     ];
 
-    for (session_id, snapshot) in events {
-        let patch = sessions.highlight_to_patch_for_session(
-            session_id,
+    for (read_id, mode, snapshot) in events {
+        if active_read_id != Some(read_id) {
+            active_read_id = Some(read_id);
+            renderer.clear_state(); // previous READ completed; start fresh
+            renderer.set_origin(4, 7);
+        }
+
+        let patch = renderer.highlight_to_patch(
             &mut highlighter,
             snapshot.as_bytes(),
-            Grammar::Sql,
+            grammar_for_mode(mode),
             &theme,
         )?;
         if !patch.is_empty() {
-            // Route to the matching terminal for this IRIS instance.
-            // write_to_terminal(session_id, patch.as_bytes())?;
+            // Write to this IRIS terminal PTY.
             print!("{patch}");
             io::stdout().flush()?;
         }
@@ -330,27 +347,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 **Explanation:**
-1. `IncrementalSessionManager` keeps one incremental renderer per session ID.
-2. Session renderers can be configured with per-session origin offsets.
-3. `highlight_to_patch_for_session` runs parse + theme + diff against that session's prior frame only.
-4. Empty patch means no write is needed for that specific IRIS terminal.
+1. One `IncrementalRenderer` tracks the active IRIS `READ` in a single PTY.
+2. Each new `read_id` marks a `READ` boundary, so `clear_state()` avoids diffing unrelated prompts.
+3. `mode` (from `$ZU()`) maps to grammar: Direct -> `ObjectScript`, SQL shell -> `Sql`.
+4. `highlight_to_patch` diffs only within the current `READ` lifecycle.
+5. Empty patch means no terminal write is needed.
 
 ### Evidence
 
-- `crates/render-ansi/src/lib.rs:30` (`IncrementalRenderer` state)
-- `crates/render-ansi/src/lib.rs:70` (`set_origin`)
-- `crates/render-ansi/src/lib.rs:125` (`IncrementalSessionManager`)
-- `crates/render-ansi/src/lib.rs:202` (`highlight_to_patch_for_session`)
-- `crates/render-ansi/src/lib.rs:497` (display-width diff-to-patch implementation)
-- `crates/render-ansi/examples/vt_patch_bridge.rs:131` (CLI usage and flags)
-- `crates/render-ansi/src/lib.rs:880` (session-isolation test)
-- `crates/render-ansi/src/lib.rs:816` (wide-grapheme display-width test)
+- `crates/render-ansi/src/lib.rs:72` (`IncrementalRenderer` state)
+- `crates/render-ansi/src/lib.rs:106` (`clear_state`)
+- `crates/render-ansi/src/lib.rs:114` (`set_origin`)
+- `crates/render-ansi/src/lib.rs:167` (`highlight_to_patch`)
+- `crates/render-ansi/src/lib.rs:757` (display-width diff-to-patch implementation)
+- `crates/render-ansi/examples/vt_patch_bridge.rs:61` (CLI option parsing including `--prev`, origin, color mode)
 
 ### Validation Notes
 
 - Verified signature against code: Yes
-- Verified usage in tests or examples: Yes (`crates/render-ansi/examples/vt_patch_bridge.rs:155`, `crates/render-ansi/src/lib.rs:799`)
-- Mismatches or assumptions: Assumes your IRIS host captures a clean text snapshot per update cycle.
+- Verified usage in tests or examples: Yes (`crates/render-ansi/examples/vt_patch_bridge.rs:152`, `crates/render-ansi/src/lib.rs:1444`)
+- Mismatches or assumptions: Assumes your IRIS host emits reliable `READ` boundary and mode (`$ZU()`) signals plus a clean text snapshot per update cycle.
 
 ## Doc/Code Mismatches
 

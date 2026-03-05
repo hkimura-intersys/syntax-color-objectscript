@@ -49,7 +49,7 @@ Purpose:
 
 Depends on:
 
-- `tree-sitter-objectscript = "1.4.0"`
+- `tree-sitter-objectscript = "1.4.3"`
 - `tree-sitter-python = "0.25.0"`
 - `tree-sitter-md = "0.5.3"`
 - `tree-sitter-highlight = ">=0.26.6"`

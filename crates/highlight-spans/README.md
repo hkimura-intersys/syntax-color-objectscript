@@ -14,6 +14,7 @@
   - `Python`
   - `Markdown` (using `tree-sitter-md` block+inline grammar/query constants)
   - `Mdx` (temporary fallback: uses SQL highlighting)
+  - `Xml` (XML host highlighting with ObjectScript injection in `<Implementation>` content)
 
 ## Quick Example
 

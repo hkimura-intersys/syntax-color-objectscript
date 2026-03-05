@@ -17,7 +17,10 @@
   - `IncrementalRenderer::set_color_mode(ColorMode::{TrueColor|Ansi256|Ansi16})`
   - `IncrementalRenderer::render_patch(source, spans) -> String`
   - `IncrementalRenderer::highlight_to_patch(...) -> String`
-  - `IncrementalSessionManager::new(default_width, default_height)` for multi-terminal/per-session state
+- Stream-safe single-line diff (no width/XY assumptions):
+  - `StreamLineRenderer::new()`
+  - `StreamLineRenderer::render_line_patch(source, spans) -> String`
+  - `StreamLineRenderer::highlight_line_to_patch(...) -> String`
 - Low-level render helpers:
   - `resolve_styled_spans(...)`
   - `render_ansi(...)`
@@ -47,9 +50,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 - Use this crate when you want terminal-ready ANSI output.
 - Incremental patching computes cursor columns by display width (grapheme-aware), not raw bytes.
+- `StreamLineRenderer` uses relative single-line patching (`CUB` + overwrite + optional `EL`) and is useful when terminal width is unknown.
 - Tab cells are interpreted with an 8-column tab stop in the incremental path.
 - Default ANSI color mode is truecolor (`38;2;r;g;b`). Use `Ansi256` or `Ansi16` for constrained terminals.
-- If you have your own paint engine (for example native C/TUI), use `highlight-spans` + `theme-engine` directly and skip ANSI rendering.
+- If you have your own paint engine (for example native C), use `highlight-spans` + `theme-engine` directly and skip ANSI rendering.
 
 ## Examples
 

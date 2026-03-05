@@ -15,6 +15,28 @@ const MARKDOWN_HIGHLIGHTS_QUERY: &str = tree_sitter_md::HIGHLIGHT_QUERY_BLOCK;
 const MARKDOWN_INJECTIONS_QUERY: &str = tree_sitter_md::INJECTION_QUERY_BLOCK;
 const MARKDOWN_INLINE_HIGHLIGHTS_QUERY: &str = tree_sitter_md::HIGHLIGHT_QUERY_INLINE;
 const MARKDOWN_INLINE_INJECTIONS_QUERY: &str = tree_sitter_md::INJECTION_QUERY_INLINE;
+const XML_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_xml::LANGUAGE_XML;
+const XML_HIGHLIGHTS_QUERY: &str = tree_sitter_xml::XML_HIGHLIGHT_QUERY;
+const XML_OBJECTSCRIPT_INJECTIONS_QUERY: &str = r#"
+(
+  element
+    (STag (Name) @_start_tag)
+    (content (CDSect (CData) @injection.content))
+    (ETag (Name) @_end_tag)
+  (#eq? @_start_tag "Implementation")
+  (#eq? @_end_tag "Implementation")
+  (#set! injection.language "objectscript")
+)
+(
+  element
+    (STag (Name) @_start_tag)
+    (content (CharData) @injection.content)
+    (ETag (Name) @_end_tag)
+  (#eq? @_start_tag "Implementation")
+  (#eq? @_end_tag "Implementation")
+  (#set! injection.language "objectscript")
+)
+"#;
 
 const SQL_LANGUAGE: tree_sitter_language::LanguageFn =
     unsafe { tree_sitter_language::LanguageFn::from_raw(tree_sitter_sql) };
@@ -27,9 +49,10 @@ pub enum Grammar {
     Python,
     Markdown,
     Mdx,
+    Xml,
 }
 
-const SUPPORTED_GRAMMARS: [&str; 5] = ["objectscript", "sql", "python", "markdown", "mdx"];
+const SUPPORTED_GRAMMARS: [&str; 6] = ["objectscript", "sql", "python", "markdown", "mdx", "xml"];
 
 impl Grammar {
     /// Parses a grammar name or alias into a [`Grammar`] value.
@@ -51,6 +74,7 @@ impl Grammar {
             Self::Python => "python",
             Self::Markdown => "markdown",
             Self::Mdx => "mdx",
+            Self::Xml => "xml",
         }
     }
 
@@ -108,9 +132,13 @@ pub struct SpanHighlighter {
     python: HighlightConfiguration,
     markdown: HighlightConfiguration,
     markdown_inline: HighlightConfiguration,
+    xml: HighlightConfiguration,
     objectscript_injection_query: tree_sitter::Query,
     objectscript_injection_content_capture: Option<u32>,
     objectscript_injection_language_capture: Option<u32>,
+    xml_injection_query: tree_sitter::Query,
+    xml_injection_content_capture: Option<u32>,
+    xml_injection_language_capture: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -158,28 +186,29 @@ impl SpanHighlighter {
             MARKDOWN_INLINE_HIGHLIGHTS_QUERY,
             MARKDOWN_INLINE_INJECTIONS_QUERY,
         )?;
+        let xml_language: tree_sitter::Language = XML_LANGUAGE.into();
+        let mut xml = new_config(xml_language.clone(), "xml", XML_HIGHLIGHTS_QUERY, "")?;
         let objectscript_injection_query = tree_sitter::Query::new(
             &objectscript_language,
             tree_sitter_objectscript::OBJECTSCRIPT_INJECTIONS_QUERY,
         )?;
-        let mut objectscript_injection_content_capture = None;
-        let mut objectscript_injection_language_capture = None;
-        for (idx, name) in objectscript_injection_query
-            .capture_names()
-            .iter()
-            .enumerate()
-        {
-            let idx = Some(idx as u32);
-            match *name {
-                "injection.content" => objectscript_injection_content_capture = idx,
-                "injection.language" => objectscript_injection_language_capture = idx,
-                _ => {}
-            }
-        }
+        let (objectscript_injection_content_capture, objectscript_injection_language_capture) =
+            injection_capture_indices(&objectscript_injection_query);
+        let xml_injection_query =
+            tree_sitter::Query::new(&xml_language, XML_OBJECTSCRIPT_INJECTIONS_QUERY)?;
+        let (xml_injection_content_capture, xml_injection_language_capture) =
+            injection_capture_indices(&xml_injection_query);
 
         let mut recognized = Vec::<String>::new();
         let mut capture_index_by_name = HashMap::<String, usize>::new();
-        for config in [&objectscript, &sql, &python, &markdown, &markdown_inline] {
+        for config in [
+            &objectscript,
+            &sql,
+            &python,
+            &markdown,
+            &markdown_inline,
+            &xml,
+        ] {
             for name in config.names() {
                 if capture_index_by_name.contains_key(*name) {
                     continue;
@@ -196,6 +225,7 @@ impl SpanHighlighter {
         python.configure(&recognized_refs);
         markdown.configure(&recognized_refs);
         markdown_inline.configure(&recognized_refs);
+        xml.configure(&recognized_refs);
         let attrs = recognized
             .into_iter()
             .enumerate()
@@ -210,16 +240,22 @@ impl SpanHighlighter {
             python,
             markdown,
             markdown_inline,
+            xml,
             objectscript_injection_query,
             objectscript_injection_content_capture,
             objectscript_injection_language_capture,
+            xml_injection_query,
+            xml_injection_content_capture,
+            xml_injection_language_capture,
         })
     }
 
     /// Highlights a source buffer and returns capture attributes plus byte spans.
     ///
     /// When `flavor` is [`Grammar::ObjectScript`], language injections are resolved
-    /// and applied to injected regions (for example embedded SQL blocks).
+    /// and applied to injected regions (for example embedded SQL blocks). When
+    /// `flavor` is [`Grammar::Xml`], ObjectScript injections are applied to
+    /// recognized XML embedded-code regions (for example `<Implementation>` bodies).
     ///
     /// # Errors
     ///
@@ -233,6 +269,8 @@ impl SpanHighlighter {
         let mut result = self.highlight_base(source, flavor)?;
         if flavor == Grammar::ObjectScript {
             self.apply_objectscript_injections(source, &mut result)?;
+        } else if flavor == Grammar::Xml {
+            self.apply_xml_injections(source, &mut result)?;
         }
         Ok(result)
     }
@@ -240,7 +278,7 @@ impl SpanHighlighter {
     /// Runs the base Tree-sitter highlight pass for a single grammar.
     ///
     /// Unlike [`Self::highlight`], this does not apply post-processing for
-    /// ObjectScript injection regions.
+    /// host-language injection regions.
     ///
     /// # Errors
     ///
@@ -257,6 +295,7 @@ impl SpanHighlighter {
             Grammar::Markdown => &self.markdown,
             // InterSystems MDX is OLAP query syntax; use SQL highlighting as a temporary fallback.
             Grammar::Mdx => &self.sql,
+            Grammar::Xml => &self.xml,
         };
 
         let attrs = self.attrs.clone();
@@ -267,6 +306,7 @@ impl SpanHighlighter {
             python: &self.python,
             markdown: &self.markdown,
             markdown_inline: &self.markdown_inline,
+            xml: &self.xml,
         };
 
         let events = self
@@ -333,6 +373,29 @@ impl SpanHighlighter {
         base: &mut HighlightResult,
     ) -> Result<(), HighlightError> {
         let injections = self.find_objectscript_injections(source)?;
+        self.apply_injections(source, base, injections)
+    }
+
+    /// Replaces XML injection regions in `base` with injected highlights.
+    ///
+    /// This currently targets XML regions where ObjectScript appears in
+    /// `<Implementation>` bodies.
+    fn apply_xml_injections(
+        &mut self,
+        source: &[u8],
+        base: &mut HighlightResult,
+    ) -> Result<(), HighlightError> {
+        let injections = self.find_xml_injections(source)?;
+        self.apply_injections(source, base, injections)
+    }
+
+    /// Applies already-discovered injection regions by replacing base spans.
+    fn apply_injections(
+        &mut self,
+        source: &[u8],
+        base: &mut HighlightResult,
+        injections: Vec<InjectionRegion>,
+    ) -> Result<(), HighlightError> {
         if injections.is_empty() {
             return Ok(());
         }
@@ -383,18 +446,61 @@ impl SpanHighlighter {
         &self,
         source: &[u8],
     ) -> Result<Vec<InjectionRegion>, HighlightError> {
-        let mut parser = tree_sitter::Parser::new();
         let objectscript_language: tree_sitter::Language =
             tree_sitter_objectscript::LANGUAGE_OBJECTSCRIPT_PLAYGROUND.into();
-        parser.set_language(&objectscript_language)?;
+        self.find_injections(
+            source,
+            &objectscript_language,
+            &self.objectscript_injection_query,
+            self.objectscript_injection_content_capture,
+            self.objectscript_injection_language_capture,
+        )
+    }
+
+    /// Finds non-overlapping XML injection regions in the source buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if parsing or query execution for injection analysis fails.
+    fn find_xml_injections(&self, source: &[u8]) -> Result<Vec<InjectionRegion>, HighlightError> {
+        let xml_language: tree_sitter::Language = XML_LANGUAGE.into();
+        self.find_injections(
+            source,
+            &xml_language,
+            &self.xml_injection_query,
+            self.xml_injection_content_capture,
+            self.xml_injection_language_capture,
+        )
+    }
+
+    /// Finds and normalizes non-overlapping injection regions for a host grammar.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if parsing or query execution for injection analysis fails.
+    fn find_injections(
+        &self,
+        source: &[u8],
+        language: &tree_sitter::Language,
+        query: &tree_sitter::Query,
+        content_capture: Option<u32>,
+        language_capture: Option<u32>,
+    ) -> Result<Vec<InjectionRegion>, HighlightError> {
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(language)?;
         let tree = parser.parse(source, None).ok_or(HighlightError::Parse)?;
         let mut cursor = tree_sitter::QueryCursor::new();
 
         let mut injections = Vec::new();
-        let mut matches =
-            cursor.matches(&self.objectscript_injection_query, tree.root_node(), source);
+        let mut matches = cursor.matches(query, tree.root_node(), source);
         while let Some(mat) = matches.next() {
-            let Some(injection) = self.injection_region_for_match(source, &mat) else {
+            let Some(injection) = self.injection_region_for_match(
+                query,
+                content_capture,
+                language_capture,
+                source,
+                &mat,
+            ) else {
                 continue;
             };
             injections.push(injection);
@@ -431,6 +537,9 @@ impl SpanHighlighter {
     /// Returns `None` when language or content captures are missing, unknown, or empty.
     fn injection_region_for_match<'a>(
         &self,
+        query: &tree_sitter::Query,
+        content_capture: Option<u32>,
+        language_capture: Option<u32>,
         source: &'a [u8],
         mat: &tree_sitter::QueryMatch<'a, 'a>,
     ) -> Option<InjectionRegion> {
@@ -439,17 +548,14 @@ impl SpanHighlighter {
 
         for capture in mat.captures {
             let index = Some(capture.index);
-            if index == self.objectscript_injection_language_capture {
+            if index == language_capture {
                 language_name = capture.node.utf8_text(source).ok();
-            } else if index == self.objectscript_injection_content_capture {
+            } else if index == content_capture {
                 content_node = Some(capture.node);
             }
         }
 
-        for prop in self
-            .objectscript_injection_query
-            .property_settings(mat.pattern_index)
-        {
+        for prop in query.property_settings(mat.pattern_index) {
             match prop.key.as_ref() {
                 "injection.language" => {
                     if language_name.is_none() {
@@ -487,6 +593,7 @@ struct InjectionConfigs<'a> {
     python: &'a HighlightConfiguration,
     markdown: &'a HighlightConfiguration,
     markdown_inline: &'a HighlightConfiguration,
+    xml: &'a HighlightConfiguration,
 }
 
 impl<'a> InjectionConfigs<'a> {
@@ -506,6 +613,7 @@ impl<'a> InjectionConfigs<'a> {
             Grammar::Python => Some(self.python),
             Grammar::Markdown => Some(self.markdown),
             Grammar::Mdx => Some(self.sql),
+            Grammar::Xml => Some(self.xml),
         }
     }
 }
@@ -530,8 +638,24 @@ fn grammar_from_normalized_name(normalized: &str) -> Option<Grammar> {
         "python" | "py" => Some(Grammar::Python),
         "markdown" | "md" | "gfm" => Some(Grammar::Markdown),
         "mdx" => Some(Grammar::Mdx),
+        "xml" => Some(Grammar::Xml),
         _ => None,
     }
+}
+
+/// Locates `injection.content` and `injection.language` captures in a query.
+fn injection_capture_indices(query: &tree_sitter::Query) -> (Option<u32>, Option<u32>) {
+    let mut content_capture = None;
+    let mut language_capture = None;
+    for (idx, name) in query.capture_names().iter().enumerate() {
+        let idx = Some(idx as u32);
+        match *name {
+            "injection.content" => content_capture = idx,
+            "injection.language" => language_capture = idx,
+            _ => {}
+        }
+    }
+    (content_capture, language_capture)
 }
 
 /// Builds and configures a Tree-sitter highlight configuration.
@@ -748,6 +872,7 @@ Class Demo.Highlight
         assert_eq!(Grammar::from_name("py"), Some(Grammar::Python));
         assert_eq!(Grammar::from_name("md"), Some(Grammar::Markdown));
         assert_eq!(Grammar::from_name("mdx"), Some(Grammar::Mdx));
+        assert_eq!(Grammar::from_name("xml"), Some(Grammar::Xml));
         assert!(Grammar::from_name("unknown").is_none());
     }
 
@@ -831,6 +956,31 @@ SELECT ID,Name FROM Employee
         assert!(
             has_capture_for_text(&result, source, "keyword", b"SELECT"),
             "expected MDX fallback to highlight SQL keywords"
+        );
+    }
+
+    #[test]
+    /// Verifies ObjectScript inside XML `<Implementation>` CDATA is injected.
+    fn xml_implementation_cdata_is_highlighted_as_objectscript() {
+        let source = br#"
+<Export>
+  <Class name="Demo.Sample">
+    <Method name="Run">
+      <Implementation><![CDATA[
+ set x = 42
+]]></Implementation>
+    </Method>
+  </Class>
+</Export>
+"#;
+        let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
+        let result = highlighter
+            .highlight(source, Grammar::Xml)
+            .expect("failed to highlight XML with ObjectScript injection");
+
+        assert!(
+            has_capture_for_text(&result, source, "number", b"42"),
+            "expected injected ObjectScript numeric literal to be highlighted"
         );
     }
 }

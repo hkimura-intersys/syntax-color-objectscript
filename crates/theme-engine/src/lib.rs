@@ -382,4 +382,20 @@ italic = true
         assert_ne!(moon, dark, "moon should differ from dark");
         assert_ne!(day, light, "day should differ from light");
     }
+
+    #[test]
+    /// Verifies built-in themes expose XML-relevant capture styles.
+    fn builtins_include_xml_capture_styles() {
+        for name in available_themes() {
+            let theme = load_theme(name).expect("failed to load built-in theme");
+            assert!(
+                theme.get_exact("tag").is_some(),
+                "missing XML tag style in {name}"
+            );
+            assert!(
+                theme.get_exact("property").is_some(),
+                "missing XML property style in {name}"
+            );
+        }
+    }
 }

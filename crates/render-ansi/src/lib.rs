@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt::Write;
 
 use highlight_spans::{Grammar, HighlightError, HighlightResult, SpanHighlighter};
@@ -177,94 +176,76 @@ impl IncrementalRenderer {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct IncrementalSessionManager {
-    default_width: usize,
-    default_height: usize,
-    sessions: HashMap<String, IncrementalRenderer>,
+/// Incremental renderer for a single mutable line without terminal width assumptions.
+///
+/// This renderer avoids absolute cursor positioning. It assumes each emitted
+/// patch is written to the same terminal line and the cursor remains at the end
+/// of the previously rendered line.
+#[derive(Debug, Clone, Default)]
+pub struct StreamLineRenderer {
+    color_mode: ColorMode,
+    prev_line: Vec<StyledCell>,
 }
 
-impl IncrementalSessionManager {
-    /// Creates a session manager with default viewport dimensions for new sessions.
-    ///
-    /// A minimum size of `1x1` is enforced.
+impl StreamLineRenderer {
+    /// Creates a line renderer with truecolor output.
     #[must_use]
-    pub fn new(default_width: usize, default_height: usize) -> Self {
-        Self {
-            default_width: default_width.max(1),
-            default_height: default_height.max(1),
-            sessions: HashMap::new(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    /// Returns the number of tracked sessions.
+    /// Clears prior line state.
+    pub fn clear_state(&mut self) {
+        self.prev_line.clear();
+    }
+
+    /// Sets the ANSI color mode used by this renderer.
+    pub fn set_color_mode(&mut self, color_mode: ColorMode) {
+        self.color_mode = color_mode;
+    }
+
+    /// Returns the current ANSI color mode.
     #[must_use]
-    pub fn session_count(&self) -> usize {
-        self.sessions.len()
+    pub fn color_mode(&self) -> ColorMode {
+        self.color_mode
     }
 
-    /// Returns an existing session renderer, creating one with default size if missing.
-    pub fn ensure_session(&mut self, session_id: &str) -> &mut IncrementalRenderer {
-        self.sessions
-            .entry(session_id.to_string())
-            .or_insert_with(|| IncrementalRenderer::new(self.default_width, self.default_height))
-    }
-
-    /// Ensures a session exists and resizes it before returning it.
-    pub fn ensure_session_with_size(
-        &mut self,
-        session_id: &str,
-        width: usize,
-        height: usize,
-    ) -> &mut IncrementalRenderer {
-        let renderer = self.ensure_session(session_id);
-        renderer.resize(width, height);
-        renderer
-    }
-
-    /// Removes a session and returns whether it existed.
-    pub fn remove_session(&mut self, session_id: &str) -> bool {
-        self.sessions.remove(session_id).is_some()
-    }
-
-    /// Clears cached frame state for a session and returns whether it existed.
-    pub fn clear_session(&mut self, session_id: &str) -> bool {
-        let Some(renderer) = self.sessions.get_mut(session_id) else {
-            return false;
-        };
-        renderer.clear_state();
-        true
-    }
-
-    /// Produces a patch for a specific session based on its own prior state.
+    /// Renders a width-independent patch for a single line.
     ///
     /// # Errors
     ///
-    /// Returns an error when span validation fails.
-    pub fn render_patch_for_session(
+    /// Returns an error when spans are invalid or input contains a newline.
+    pub fn render_line_patch(
         &mut self,
-        session_id: &str,
         source: &[u8],
         spans: &[StyledSpan],
     ) -> Result<String, RenderError> {
-        self.ensure_session(session_id).render_patch(source, spans)
+        validate_spans(source.len(), spans)?;
+        if source.contains(&b'\n') {
+            return Err(RenderError::MultiLineInput);
+        }
+
+        let curr_line = build_styled_line_cells(source, spans);
+        let patch = diff_single_line_to_patch(&self.prev_line, &curr_line, self.color_mode);
+        self.prev_line = curr_line;
+        Ok(patch)
     }
 
-    /// Runs highlight + theme resolution + patch generation for a specific session.
+    /// Runs highlight + theme resolution + stream-safe single-line diff.
     ///
     /// # Errors
     ///
-    /// Returns an error if highlighting fails or spans fail validation.
-    pub fn highlight_to_patch_for_session(
+    /// Returns an error if highlighting fails, spans are invalid, or input has newlines.
+    pub fn highlight_line_to_patch(
         &mut self,
-        session_id: &str,
         highlighter: &mut SpanHighlighter,
         source: &[u8],
         flavor: Grammar,
         theme: &Theme,
     ) -> Result<String, RenderError> {
-        self.ensure_session(session_id)
-            .highlight_to_patch(highlighter, source, flavor, theme)
+        let highlight = highlighter.highlight(source, flavor)?;
+        let styled = resolve_styled_spans_for_source(source.len(), &highlight, theme)?;
+        self.render_line_patch(source, &styled)
     }
 }
 
@@ -284,6 +265,8 @@ pub enum RenderError {
     OverlappingSpans { prev_end: usize, next_start: usize },
     #[error("invalid attr_id {attr_id}; attrs length is {attrs_len}")]
     InvalidAttrId { attr_id: usize, attrs_len: usize },
+    #[error("stream line patch requires single-line input without newlines")]
+    MultiLineInput,
 }
 
 /// Resolves highlight spans into renderable spans by attaching theme styles.
@@ -731,6 +714,44 @@ fn build_styled_cells(
     lines
 }
 
+/// Projects a single-line source and spans into styled cells for line diffing.
+fn build_styled_line_cells(source: &[u8], spans: &[StyledSpan]) -> Vec<StyledCell> {
+    let mut line = Vec::new();
+    let mut line_display_width = 0usize;
+    let mut span_cursor = 0usize;
+
+    let rendered = String::from_utf8_lossy(source);
+    for (byte_idx, grapheme) in rendered.grapheme_indices(true) {
+        while span_cursor < spans.len() && spans[span_cursor].end_byte <= byte_idx {
+            span_cursor += 1;
+        }
+
+        let style = if let Some(span) = spans.get(span_cursor) {
+            if byte_idx >= span.start_byte && byte_idx < span.end_byte {
+                span.style
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if grapheme == "\n" {
+            break;
+        }
+
+        let cell_width = display_width_for_grapheme(grapheme, line_display_width);
+        line.push(StyledCell {
+            text: grapheme.to_string(),
+            style,
+            width: cell_width,
+        });
+        line_display_width = line_display_width.saturating_add(cell_width);
+    }
+
+    line
+}
+
 /// Returns the terminal display width of a grapheme at a given display column.
 fn display_width_for_grapheme(grapheme: &str, line_display_width: usize) -> usize {
     if grapheme == "\t" {
@@ -788,6 +809,30 @@ fn diff_lines_to_patch(
     out
 }
 
+/// Builds a single-line VT patch using only relative backward cursor motion.
+///
+/// Assumes cursor starts at the end of `prev_line` and remains on the same line.
+fn diff_single_line_to_patch(
+    prev_line: &[StyledCell],
+    curr_line: &[StyledCell],
+    color_mode: ColorMode,
+) -> String {
+    let mut out = String::new();
+    let Some(first_diff) = first_diff_index(prev_line, curr_line) else {
+        return out;
+    };
+
+    let prev_width = display_columns_before(prev_line, prev_line.len());
+    let prefix_width = display_columns_before(prev_line, first_diff);
+    let cols_back = prev_width.saturating_sub(prefix_width);
+    write_cub(&mut out, cols_back);
+    append_styled_cells(&mut out, &curr_line[first_diff..], color_mode);
+    if curr_line.len() < prev_line.len() {
+        out.push_str(EL_TO_END);
+    }
+    out
+}
+
 /// Returns the accumulated display columns before `idx`.
 fn display_columns_before(cells: &[StyledCell], idx: usize) -> usize {
     cells.iter().take(idx).map(|cell| cell.width).sum::<usize>()
@@ -812,6 +857,14 @@ fn first_diff_index(prev: &[StyledCell], curr: &[StyledCell]) -> Option<usize> {
 /// Writes a CUP cursor-position sequence into `out`.
 fn write_cup(out: &mut String, row: usize, col: usize) {
     let _ = write!(out, "{CSI}{row};{col}H");
+}
+
+/// Writes a relative cursor-left (CUB) sequence into `out`.
+fn write_cub(out: &mut String, cols: usize) {
+    if cols == 0 {
+        return;
+    }
+    let _ = write!(out, "{CSI}{cols}D");
 }
 
 /// Appends styled cells as text and SGR transitions.
@@ -1069,7 +1122,7 @@ mod tests {
     use super::{
         highlight_lines_to_ansi_lines, highlight_to_ansi, render_ansi, render_ansi_lines,
         render_ansi_with_mode, resolve_styled_spans, resolve_styled_spans_for_source, ColorMode,
-        IncrementalRenderer, IncrementalSessionManager, RenderError, StyledSpan,
+        IncrementalRenderer, RenderError, StreamLineRenderer, StyledSpan,
     };
     use highlight_spans::{Attr, Grammar, HighlightResult, Span, SpanHighlighter};
     use theme_engine::{load_theme, Rgb, Style, Theme};
@@ -1089,6 +1142,78 @@ mod tests {
         }];
         let out = render_ansi(source, &spans).expect("failed to render");
         assert_eq!(out, "a\x1b[38;2;255;0;0;1mb\x1b[0mc");
+    }
+
+    #[test]
+    /// Verifies stream line renderer paints the initial line as-is.
+    fn stream_line_renderer_emits_initial_line() {
+        let mut renderer = StreamLineRenderer::new();
+        let patch = renderer
+            .render_line_patch(b"hello", &[])
+            .expect("initial stream patch failed");
+        assert_eq!(patch, "hello");
+    }
+
+    #[test]
+    /// Verifies stream line renderer emits a suffix-only patch with CUB backtracking.
+    fn stream_line_renderer_emits_suffix_with_backtracking() {
+        let mut renderer = StreamLineRenderer::new();
+        let _ = renderer
+            .render_line_patch(b"hello", &[])
+            .expect("initial stream patch failed");
+        let patch = renderer
+            .render_line_patch(b"heLlo", &[])
+            .expect("delta stream patch failed");
+        assert_eq!(patch, "\x1b[3DLlo");
+    }
+
+    #[test]
+    /// Verifies stream line renderer clears trailing cells when line becomes shorter.
+    fn stream_line_renderer_clears_removed_tail() {
+        let mut renderer = StreamLineRenderer::new();
+        let _ = renderer
+            .render_line_patch(b"hello", &[])
+            .expect("initial stream patch failed");
+        let patch = renderer
+            .render_line_patch(b"he", &[])
+            .expect("delta stream patch failed");
+        assert_eq!(patch, "\x1b[3D\x1b[K");
+    }
+
+    #[test]
+    /// Verifies stream line renderer emits nothing for unchanged input.
+    fn stream_line_renderer_is_noop_when_unchanged() {
+        let mut renderer = StreamLineRenderer::new();
+        let _ = renderer
+            .render_line_patch(b"hello", &[])
+            .expect("initial stream patch failed");
+        let patch = renderer
+            .render_line_patch(b"hello", &[])
+            .expect("delta stream patch failed");
+        assert!(patch.is_empty());
+    }
+
+    #[test]
+    /// Verifies stream line renderer rejects multi-line input.
+    fn stream_line_renderer_rejects_multiline_input() {
+        let mut renderer = StreamLineRenderer::new();
+        let err = renderer
+            .render_line_patch(b"hello\nworld", &[])
+            .expect_err("expected multiline rejection");
+        assert!(matches!(err, RenderError::MultiLineInput));
+    }
+
+    #[test]
+    /// Verifies stream line backtracking uses display width for wide graphemes.
+    fn stream_line_renderer_uses_display_width_for_wide_graphemes() {
+        let mut renderer = StreamLineRenderer::new();
+        let _ = renderer
+            .render_line_patch("a界!".as_bytes(), &[])
+            .expect("initial stream patch failed");
+        let patch = renderer
+            .render_line_patch("a界?".as_bytes(), &[])
+            .expect("delta stream patch failed");
+        assert_eq!(patch, "\x1b[1D?");
     }
 
     #[test]
@@ -1461,68 +1586,5 @@ mod tests {
             .expect("highlight patch failed");
         assert!(patch.contains("\x1b[1;1H"));
         assert!(patch.contains("SELECT"));
-    }
-
-    #[test]
-    /// Verifies session manager state is isolated per session id.
-    fn session_manager_keeps_incremental_state_per_session() {
-        let theme = Theme::from_json_str(
-            r#"{
-  "styles": {
-    "normal": { "fg": { "r": 220, "g": 220, "b": 220 } },
-    "keyword": { "fg": { "r": 255, "g": 0, "b": 0 } }
-  }
-}"#,
-        )
-        .expect("theme parse failed");
-        let mut highlighter = SpanHighlighter::new().expect("highlighter init failed");
-        let mut manager = IncrementalSessionManager::new(120, 40);
-
-        let a_initial = manager
-            .highlight_to_patch_for_session(
-                "iris-a",
-                &mut highlighter,
-                b"SELECT 1",
-                Grammar::Sql,
-                &theme,
-            )
-            .expect("a initial patch failed");
-        assert!(!a_initial.is_empty());
-
-        let b_initial = manager
-            .highlight_to_patch_for_session(
-                "iris-b",
-                &mut highlighter,
-                b"SELECT 1",
-                Grammar::Sql,
-                &theme,
-            )
-            .expect("b initial patch failed");
-        assert!(!b_initial.is_empty());
-
-        let a_second = manager
-            .highlight_to_patch_for_session(
-                "iris-a",
-                &mut highlighter,
-                b"SELECT 2",
-                Grammar::Sql,
-                &theme,
-            )
-            .expect("a second patch failed");
-        assert!(!a_second.is_empty());
-
-        let b_second = manager
-            .highlight_to_patch_for_session(
-                "iris-b",
-                &mut highlighter,
-                b"SELECT 1",
-                Grammar::Sql,
-                &theme,
-            )
-            .expect("b second patch failed");
-        assert!(
-            b_second.is_empty(),
-            "session b should have no patch when its own state is unchanged"
-        );
     }
 }
