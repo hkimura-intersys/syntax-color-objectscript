@@ -23,7 +23,7 @@
 use theme_engine::load_theme;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let theme = load_theme("tokyo-night")?;
+    let theme = load_theme("tokyonight-dark")?;
     let style = theme.resolve("@comment.documentation");
     println!("style found: {}", style.is_some());
     Ok(())

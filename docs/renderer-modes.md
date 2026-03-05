@@ -68,8 +68,8 @@ fn render_full_ansi16(source: &[u8], theme: &Theme) -> Result<String, Box<dyn st
 
 ### Evidence
 
-- `crates/render-ansi/src/lib.rs:549` (`highlight_to_ansi`)
-- `crates/render-ansi/src/lib.rs:591` (`highlight_to_ansi_with_mode`)
+- `crates/render-ansi/src/lib.rs:492` (`highlight_to_ansi`)
+- `crates/render-ansi/src/lib.rs:534` (`highlight_to_ansi_with_mode`)
 - `crates/render-ansi/examples/show_highlight.rs:94` (real example usage)
 
 ### Validation Notes
@@ -165,8 +165,8 @@ fn patch_once(
 
 ### Evidence
 
-- `crates/render-ansi/src/lib.rs:77` (`IncrementalRenderer`)
-- `crates/render-ansi/src/lib.rs:172` (`highlight_to_patch`)
+- `crates/render-ansi/src/lib.rs:71` (`IncrementalRenderer`)
+- `crates/render-ansi/src/lib.rs:166` (`highlight_to_patch`)
 - `crates/render-ansi/examples/vt_patch_bridge.rs:199` (real example usage)
 
 ### Validation Notes
@@ -256,9 +256,9 @@ fn configure_stream(renderer: &mut StreamLineRenderer) {
 
 ### Evidence
 
-- `crates/render-ansi/src/lib.rs:242` (`StreamLineRenderer`)
-- `crates/render-ansi/src/lib.rs:296` (`highlight_line_to_patch`)
-- `crates/render-ansi/src/lib.rs:282` (`MultiLineInput` behavior)
+- `crates/render-ansi/src/lib.rs:185` (`StreamLineRenderer`)
+- `crates/render-ansi/src/lib.rs:239` (`highlight_line_to_patch`)
+- `crates/render-ansi/src/lib.rs:225` (`MultiLineInput` behavior)
 - `crates/render-ansi/examples/stream_line_bridge.rs:137` (real example usage)
 
 ### Validation Notes

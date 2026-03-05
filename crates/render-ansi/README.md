@@ -60,6 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - `show_highlight`: full-frame ANSI render for a file.
 - `zedit_bridge`: machine-readable paint ops (`start end fg_r fg_g fg_b bg_r bg_g bg_b flags`).
 - `vt_patch_bridge`: incremental VT patch output using `IncrementalRenderer`.
+- `stream_line_bridge`: width-independent single-line patch output using `StreamLineRenderer`.
 
 ## Incremental Origin Offset
 

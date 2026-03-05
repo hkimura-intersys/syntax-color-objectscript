@@ -3,7 +3,7 @@
 ## 1. Introduction and Goals
 
 This document covers the full Rust workspace that provides ObjectScript highlighting data and ANSI rendering adapters (`Cargo.toml:1`, `Cargo.toml:2`).
-Primary audience: maintainers of this workspace and integrators embedding the crates in CLI/TUI tools (`crates/render-ansi/src/lib.rs:118`, `crates/highlight-spans/src/lib.rs:43`).
+Primary audience: maintainers of this workspace and integrators embedding the crates in CLI/terminal tools (`crates/render-ansi/src/lib.rs:118`, `crates/highlight-spans/src/lib.rs:43`).
 Goal: keep parser output, theme lookup, and rendering concerns independently evolvable (`crates/render-ansi/Cargo.toml:9`, `crates/render-ansi/Cargo.toml:10`, `crates/theme-engine/Cargo.toml:1`).
 
 ## 2. Constraints

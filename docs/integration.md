@@ -34,7 +34,7 @@ cargo run
 
 ### Optional: line-oriented output for incremental redraw
 
-Use `highlight_lines_to_ansi_lines(...)` when your terminal UI redraws line-by-line.
+Use `highlight_lines_to_ansi_lines(...)` when your terminal host redraws line-by-line.
 
 ### Optional: incremental VT patch output for interactive IRIS sessions
 

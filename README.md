@@ -8,7 +8,7 @@ Workspace for syntax coloring with a clean split between:
 This lets one parser/theme pipeline support multiple outputs:
 
 - ANSI/VT terminal rendering
-- native C/TUI paint engines
+- native C paint engines
 - future GUI/web adapters
 
 ## What This Accomplishes

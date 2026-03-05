@@ -131,7 +131,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 use theme_engine::load_theme;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let theme = load_theme("tokyo-night")?;
+    let theme = load_theme("tokyonight-dark")?;
     let style = theme.resolve("unknown.capture");
     assert!(style.is_some());
     Ok(())
@@ -206,7 +206,7 @@ use render_ansi::highlight_lines_to_ansi_lines;
 use theme_engine::load_theme;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let theme = load_theme("tokyo-night")?;
+    let theme = load_theme("tokyonight-dark")?;
     let lines = vec!["set x = 1", "set y = 2"];
     let rendered = highlight_lines_to_ansi_lines(&lines, Grammar::ObjectScript, &theme)?;
 
@@ -218,20 +218,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 **Explanation:**
 1. Line API returns `Vec<String>` aligned to input line count.
 2. Multi-line styled spans are clipped per line in renderer internals.
-3. This is useful for TUI panes that redraw line-by-line.
+3. This is useful for terminal panes that redraw line-by-line.
 
 ### Evidence
 
-- `crates/render-ansi/src/lib.rs:343` (orchestration API)
-- `crates/render-ansi/src/lib.rs:363` (highlight call)
-- `crates/render-ansi/src/lib.rs:364` (style resolution)
-- `crates/render-ansi/src/lib.rs:375` (line API)
-- `crates/render-ansi/src/lib.rs:316` (line clipping)
+- `crates/render-ansi/src/lib.rs:492` (orchestration API)
+- `crates/render-ansi/src/lib.rs:556` (highlight call)
+- `crates/render-ansi/src/lib.rs:557` (style resolution)
+- `crates/render-ansi/src/lib.rs:568` (line API)
+- `crates/render-ansi/src/lib.rs:460` (line clipping)
 
 ### Validation Notes
 
 - Verified signature against code: Yes
-- Verified usage in tests or examples: Yes (`crates/render-ansi/src/lib.rs:749`, `crates/render-ansi/src/lib.rs:768`)
+- Verified usage in tests or examples: Yes (`crates/render-ansi/src/lib.rs:1438`, `crates/render-ansi/src/lib.rs:1456`)
 - Mismatches or assumptions: None
 
 ## Example UX-004: Incremental VT Patches for IRIS SQL Terminal Updates
@@ -355,17 +355,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Evidence
 
-- `crates/render-ansi/src/lib.rs:72` (`IncrementalRenderer` state)
-- `crates/render-ansi/src/lib.rs:106` (`clear_state`)
-- `crates/render-ansi/src/lib.rs:114` (`set_origin`)
-- `crates/render-ansi/src/lib.rs:167` (`highlight_to_patch`)
-- `crates/render-ansi/src/lib.rs:757` (display-width diff-to-patch implementation)
+- `crates/render-ansi/src/lib.rs:71` (`IncrementalRenderer` state)
+- `crates/render-ansi/src/lib.rs:105` (`clear_state`)
+- `crates/render-ansi/src/lib.rs:113` (`set_origin`)
+- `crates/render-ansi/src/lib.rs:166` (`highlight_to_patch`)
+- `crates/render-ansi/src/lib.rs:778` (display-width diff-to-patch implementation)
 - `crates/render-ansi/examples/vt_patch_bridge.rs:61` (CLI option parsing including `--prev`, origin, color mode)
 
 ### Validation Notes
 
 - Verified signature against code: Yes
-- Verified usage in tests or examples: Yes (`crates/render-ansi/examples/vt_patch_bridge.rs:152`, `crates/render-ansi/src/lib.rs:1444`)
+- Verified usage in tests or examples: Yes (`crates/render-ansi/examples/vt_patch_bridge.rs:199`, `crates/render-ansi/src/lib.rs:1458`)
 - Mismatches or assumptions: Assumes your IRIS host emits reliable `READ` boundary and mode (`$ZU()`) signals plus a clean text snapshot per update cycle.
 
 ## Doc/Code Mismatches
