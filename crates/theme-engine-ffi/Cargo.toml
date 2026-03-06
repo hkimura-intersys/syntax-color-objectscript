@@ -1,0 +1,12 @@
+[package]
+name = "theme-engine-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "C FFI bindings for theme-engine theme loading and style resolution"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+theme-engine = { version = "0.5.0", path = "../theme-engine" }

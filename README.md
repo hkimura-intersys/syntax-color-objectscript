@@ -28,6 +28,7 @@ crates/
   theme-engine/     # capture name -> style resolution + built-in theme loader
     themes/         # built-in JSON themes (tokyonight/solarized)
   render-ansi/      # styled ranges -> ANSI/VT escape output
+  theme-engine-ffi/ # C ABI wrapper around theme-engine
 docs/
   architecture.md
   highlight-spans.md
@@ -63,6 +64,8 @@ Purpose:
 - Resolve capture names to concrete styles:
   - `fg`/`bg` RGB
   - `bold`, `italic`, `underline`
+- Resolve UI-role styles (`statusline`, `tab_active`, `selection`, etc.).
+- Provide theme default terminal fg/bg for OSC 10/11 integration.
 - Normalize capture keys (`@comment` and `comment` both resolve).
 - Support fallback (`comment.documentation -> comment -> normal`).
 - Include built-in themes: `tokyonight-dark`, `tokyonight-moon`, `tokyonight-light`, `tokyonight-day`, `solarized-dark`, `solarized-light`.
@@ -75,9 +78,20 @@ Purpose:
 - Convert highlighted byte spans into ANSI/VT escaped text.
 - Provide line-oriented APIs (`Vec<String>`) for terminal rendering.
 - Provide incremental VT patching with configurable terminal origin offsets (`row`, `col`).
+- Provide bridge-friendly auto mode selection (`vt_patch_bridge`) when origin is omitted.
 - Compute incremental patch columns using grapheme/display-width logic (wide Unicode and tabs).
+- Provide OSC helpers for terminal default fg/bg updates from theme values.
 - Keep renderer logic separate from parsing and theme selection.
 - [Crate README](crates/render-ansi/README.md)
+
+### `theme-engine-ffi`
+
+Purpose:
+
+- Expose `theme-engine` APIs to C hosts via a stable FFI layer.
+- Resolve both syntax capture styles and UI role styles from C.
+- Provide theme default terminal fg/bg colors for OSC 10/11 integration.
+- [Crate README](crates/theme-engine-ffi/README.md)
 
 ## Data Flow
 

@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
 use highlight_spans::{Grammar, HighlightError, HighlightResult, SpanHighlighter};
-use theme_engine::{Style, Theme};
+use theme_engine::{Rgb, Style, Theme};
 use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
@@ -9,9 +9,14 @@ use unicode_width::UnicodeWidthStr;
 const CSI: &str = "\x1b[";
 const SGR_RESET: &str = "\x1b[0m";
 const EL_TO_END: &str = "\x1b[K";
+const OSC: &str = "\x1b]";
+const ST_BEL: &str = "\x07";
+const OSC_RESET_DEFAULT_FG: &str = "\x1b]110\x07";
+const OSC_RESET_DEFAULT_BG: &str = "\x1b]111\x07";
 const TAB_STOP: usize = 8;
 const ANSI_256_LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
 const COLOR_MODE_NAMES: [&str; 3] = ["truecolor", "ansi256", "ansi16"];
+const PRESERVE_TERMINAL_BACKGROUND_DEFAULT: bool = true;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
 pub enum ColorMode {
@@ -53,6 +58,67 @@ impl ColorMode {
     }
 }
 
+/// Builds OSC `10` to set terminal default foreground color.
+#[must_use]
+pub fn osc_set_default_foreground(color: Rgb) -> String {
+    format!(
+        "{OSC}10;#{:02x}{:02x}{:02x}{ST_BEL}",
+        color.r, color.g, color.b
+    )
+}
+
+/// Builds OSC `11` to set terminal default background color.
+#[must_use]
+pub fn osc_set_default_background(color: Rgb) -> String {
+    format!(
+        "{OSC}11;#{:02x}{:02x}{:02x}{ST_BEL}",
+        color.r, color.g, color.b
+    )
+}
+
+/// Builds OSC `10`/`11` terminal default-color updates.
+///
+/// Omitted channels are not emitted.
+#[must_use]
+pub fn osc_set_default_colors(fg: Option<Rgb>, bg: Option<Rgb>) -> String {
+    let mut out = String::new();
+    if let Some(color) = fg {
+        out.push_str(&osc_set_default_foreground(color));
+    }
+    if let Some(color) = bg {
+        out.push_str(&osc_set_default_background(color));
+    }
+    out
+}
+
+/// Builds OSC terminal default-color updates from a theme.
+///
+/// Colors are resolved from `default_fg`/`default_bg` UI roles first, then
+/// fall back to the theme `normal` style.
+#[must_use]
+pub fn osc_set_default_colors_from_theme(theme: &Theme) -> String {
+    let (fg, bg) = theme.default_terminal_colors();
+    osc_set_default_colors(fg, bg)
+}
+
+/// Returns OSC `110` to reset terminal default foreground color.
+#[must_use]
+pub const fn osc_reset_default_foreground() -> &'static str {
+    OSC_RESET_DEFAULT_FG
+}
+
+/// Returns OSC `111` to reset terminal default background color.
+#[must_use]
+pub const fn osc_reset_default_background() -> &'static str {
+    OSC_RESET_DEFAULT_BG
+}
+
+/// Returns OSC `110` + `111` to reset terminal default foreground/background colors.
+#[must_use]
+pub const fn osc_reset_default_colors() -> &'static str {
+    "\x1b]110\x07\x1b]111\x07"
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct StyledSpan {
     pub start_byte: usize,
@@ -74,6 +140,7 @@ pub struct IncrementalRenderer {
     origin_row: usize,
     origin_col: usize,
     color_mode: ColorMode,
+    preserve_terminal_background: bool,
     prev_lines: Vec<Vec<StyledCell>>,
 }
 
@@ -90,6 +157,7 @@ impl IncrementalRenderer {
             origin_row: 1,
             origin_col: 1,
             color_mode: ColorMode::TrueColor,
+            preserve_terminal_background: PRESERVE_TERMINAL_BACKGROUND_DEFAULT,
             prev_lines: Vec::new(),
         }
     }
@@ -132,6 +200,20 @@ impl IncrementalRenderer {
         self.color_mode
     }
 
+    /// Controls whether ANSI rendering preserves the terminal's existing background.
+    ///
+    /// When set to `true` (default), background colors from the theme are ignored.
+    /// When set to `false`, background colors from resolved theme styles are emitted.
+    pub fn set_preserve_terminal_background(&mut self, preserve_terminal_background: bool) {
+        self.preserve_terminal_background = preserve_terminal_background;
+    }
+
+    /// Returns whether terminal background passthrough is enabled.
+    #[must_use]
+    pub fn preserve_terminal_background(&self) -> bool {
+        self.preserve_terminal_background
+    }
+
     /// Renders only the VT patch from the cached frame to `source`.
     ///
     /// The method validates input spans, projects them to styled terminal cells,
@@ -153,6 +235,7 @@ impl IncrementalRenderer {
             self.origin_row,
             self.origin_col,
             self.color_mode,
+            self.preserve_terminal_background,
         );
         self.prev_lines = curr_lines;
         Ok(patch)
@@ -181,9 +264,10 @@ impl IncrementalRenderer {
 /// This renderer avoids absolute cursor positioning. It assumes each emitted
 /// patch is written to the same terminal line and the cursor remains at the end
 /// of the previously rendered line.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct StreamLineRenderer {
     color_mode: ColorMode,
+    preserve_terminal_background: bool,
     prev_line: Vec<StyledCell>,
 }
 
@@ -210,6 +294,20 @@ impl StreamLineRenderer {
         self.color_mode
     }
 
+    /// Controls whether ANSI rendering preserves the terminal's existing background.
+    ///
+    /// When set to `true` (default), background colors from the theme are ignored.
+    /// When set to `false`, background colors from resolved theme styles are emitted.
+    pub fn set_preserve_terminal_background(&mut self, preserve_terminal_background: bool) {
+        self.preserve_terminal_background = preserve_terminal_background;
+    }
+
+    /// Returns whether terminal background passthrough is enabled.
+    #[must_use]
+    pub fn preserve_terminal_background(&self) -> bool {
+        self.preserve_terminal_background
+    }
+
     /// Renders a width-independent patch for a single line.
     ///
     /// # Errors
@@ -226,7 +324,12 @@ impl StreamLineRenderer {
         }
 
         let curr_line = build_styled_line_cells(source, spans);
-        let patch = diff_single_line_to_patch(&self.prev_line, &curr_line, self.color_mode);
+        let patch = diff_single_line_to_patch(
+            &self.prev_line,
+            &curr_line,
+            self.color_mode,
+            self.preserve_terminal_background,
+        );
         self.prev_line = curr_line;
         Ok(patch)
     }
@@ -246,6 +349,16 @@ impl StreamLineRenderer {
         let highlight = highlighter.highlight(source, flavor)?;
         let styled = resolve_styled_spans_for_source(source.len(), &highlight, theme)?;
         self.render_line_patch(source, &styled)
+    }
+}
+
+impl Default for StreamLineRenderer {
+    fn default() -> Self {
+        Self {
+            color_mode: ColorMode::TrueColor,
+            preserve_terminal_background: PRESERVE_TERMINAL_BACKGROUND_DEFAULT,
+            prev_line: Vec::new(),
+        }
     }
 }
 
@@ -390,6 +503,28 @@ pub fn render_ansi_with_mode(
     spans: &[StyledSpan],
     color_mode: ColorMode,
 ) -> Result<String, RenderError> {
+    render_ansi_with_mode_and_background(
+        source,
+        spans,
+        color_mode,
+        PRESERVE_TERMINAL_BACKGROUND_DEFAULT,
+    )
+}
+
+/// Renders a source buffer and styled spans into a single ANSI string.
+///
+/// When `preserve_terminal_background` is `true`, background colors in styles
+/// are ignored so output keeps the terminal's current background.
+///
+/// # Errors
+///
+/// Returns an error when spans are out of bounds, unsorted, or overlapping.
+pub fn render_ansi_with_mode_and_background(
+    source: &[u8],
+    spans: &[StyledSpan],
+    color_mode: ColorMode,
+    preserve_terminal_background: bool,
+) -> Result<String, RenderError> {
     validate_spans(source.len(), spans)?;
 
     let mut out = String::new();
@@ -403,6 +538,7 @@ pub fn render_ansi_with_mode(
             &source[span.start_byte..span.end_byte],
             span.style,
             color_mode,
+            preserve_terminal_background,
         );
         cursor = span.end_byte;
     }
@@ -437,6 +573,29 @@ pub fn render_ansi_lines_with_mode(
     spans: &[StyledSpan],
     color_mode: ColorMode,
 ) -> Result<Vec<String>, RenderError> {
+    render_ansi_lines_with_mode_and_background(
+        source,
+        spans,
+        color_mode,
+        PRESERVE_TERMINAL_BACKGROUND_DEFAULT,
+    )
+}
+
+/// Renders a source buffer and styled spans into per-line ANSI strings.
+///
+/// Spans that cross line boundaries are clipped per line.
+/// When `preserve_terminal_background` is `true`, background colors in styles
+/// are ignored so output keeps the terminal's current background.
+///
+/// # Errors
+///
+/// Returns an error when spans are out of bounds, unsorted, or overlapping.
+pub fn render_ansi_lines_with_mode_and_background(
+    source: &[u8],
+    spans: &[StyledSpan],
+    color_mode: ColorMode,
+    preserve_terminal_background: bool,
+) -> Result<Vec<String>, RenderError> {
     validate_spans(source.len(), spans)?;
 
     let line_ranges = compute_line_ranges(source);
@@ -467,6 +626,7 @@ pub fn render_ansi_lines_with_mode(
                 &source[seg_start..seg_end],
                 span.style,
                 color_mode,
+                preserve_terminal_background,
             );
             cursor = seg_end;
             i += 1;
@@ -537,8 +697,36 @@ pub fn highlight_to_ansi_with_mode(
     theme: &Theme,
     color_mode: ColorMode,
 ) -> Result<String, RenderError> {
+    highlight_to_ansi_with_mode_and_background(
+        source,
+        flavor,
+        theme,
+        color_mode,
+        PRESERVE_TERMINAL_BACKGROUND_DEFAULT,
+    )
+}
+
+/// Highlights and renders a source buffer with explicit color and background behavior.
+///
+/// # Errors
+///
+/// Returns an error if highlighting fails or if rendered spans are invalid.
+pub fn highlight_to_ansi_with_mode_and_background(
+    source: &[u8],
+    flavor: Grammar,
+    theme: &Theme,
+    color_mode: ColorMode,
+    preserve_terminal_background: bool,
+) -> Result<String, RenderError> {
     let mut highlighter = SpanHighlighter::new()?;
-    highlight_to_ansi_with_highlighter_and_mode(&mut highlighter, source, flavor, theme, color_mode)
+    highlight_to_ansi_with_highlighter_and_mode_and_background(
+        &mut highlighter,
+        source,
+        flavor,
+        theme,
+        color_mode,
+        preserve_terminal_background,
+    )
 }
 
 /// Highlights and renders a source buffer using a caller-provided highlighter and color mode.
@@ -553,9 +741,32 @@ pub fn highlight_to_ansi_with_highlighter_and_mode(
     theme: &Theme,
     color_mode: ColorMode,
 ) -> Result<String, RenderError> {
+    highlight_to_ansi_with_highlighter_and_mode_and_background(
+        highlighter,
+        source,
+        flavor,
+        theme,
+        color_mode,
+        PRESERVE_TERMINAL_BACKGROUND_DEFAULT,
+    )
+}
+
+/// Highlights and renders a source buffer using caller-provided highlighter and explicit background behavior.
+///
+/// # Errors
+///
+/// Returns an error if highlighting fails or if rendered spans are invalid.
+pub fn highlight_to_ansi_with_highlighter_and_mode_and_background(
+    highlighter: &mut SpanHighlighter,
+    source: &[u8],
+    flavor: Grammar,
+    theme: &Theme,
+    color_mode: ColorMode,
+    preserve_terminal_background: bool,
+) -> Result<String, RenderError> {
     let highlight = highlighter.highlight(source, flavor)?;
     let styled = resolve_styled_spans_for_source(source.len(), &highlight, theme)?;
-    render_ansi_with_mode(source, &styled, color_mode)
+    render_ansi_with_mode_and_background(source, &styled, color_mode, preserve_terminal_background)
 }
 
 /// Highlights line-oriented input and returns ANSI output per line.
@@ -613,13 +824,37 @@ pub fn highlight_lines_to_ansi_lines_with_mode<S: AsRef<str>>(
     theme: &Theme,
     color_mode: ColorMode,
 ) -> Result<Vec<String>, RenderError> {
+    highlight_lines_to_ansi_lines_with_mode_and_background(
+        lines,
+        flavor,
+        theme,
+        color_mode,
+        PRESERVE_TERMINAL_BACKGROUND_DEFAULT,
+    )
+}
+
+/// Highlights line-oriented input and returns ANSI output per line with explicit color and background behavior.
+///
+/// This convenience API creates a temporary [`SpanHighlighter`].
+///
+/// # Errors
+///
+/// Returns an error if highlighting fails or if rendered spans are invalid.
+pub fn highlight_lines_to_ansi_lines_with_mode_and_background<S: AsRef<str>>(
+    lines: &[S],
+    flavor: Grammar,
+    theme: &Theme,
+    color_mode: ColorMode,
+    preserve_terminal_background: bool,
+) -> Result<Vec<String>, RenderError> {
     let mut highlighter = SpanHighlighter::new()?;
-    highlight_lines_to_ansi_lines_with_highlighter_and_mode(
+    highlight_lines_to_ansi_lines_with_highlighter_and_mode_and_background(
         &mut highlighter,
         lines,
         flavor,
         theme,
         color_mode,
+        preserve_terminal_background,
     )
 }
 
@@ -635,6 +870,29 @@ pub fn highlight_lines_to_ansi_lines_with_highlighter_and_mode<S: AsRef<str>>(
     theme: &Theme,
     color_mode: ColorMode,
 ) -> Result<Vec<String>, RenderError> {
+    highlight_lines_to_ansi_lines_with_highlighter_and_mode_and_background(
+        highlighter,
+        lines,
+        flavor,
+        theme,
+        color_mode,
+        PRESERVE_TERMINAL_BACKGROUND_DEFAULT,
+    )
+}
+
+/// Highlights line-oriented input with caller-provided highlighter, color mode, and background behavior.
+///
+/// # Errors
+///
+/// Returns an error if highlighting fails or if rendered spans are invalid.
+pub fn highlight_lines_to_ansi_lines_with_highlighter_and_mode_and_background<S: AsRef<str>>(
+    highlighter: &mut SpanHighlighter,
+    lines: &[S],
+    flavor: Grammar,
+    theme: &Theme,
+    color_mode: ColorMode,
+    preserve_terminal_background: bool,
+) -> Result<Vec<String>, RenderError> {
     let highlight = highlighter.highlight_lines(lines, flavor)?;
     let source = lines
         .iter()
@@ -642,7 +900,12 @@ pub fn highlight_lines_to_ansi_lines_with_highlighter_and_mode<S: AsRef<str>>(
         .collect::<Vec<_>>()
         .join("\n");
     let styled = resolve_styled_spans_for_source(source.len(), &highlight, theme)?;
-    render_ansi_lines_with_mode(source.as_bytes(), &styled, color_mode)
+    render_ansi_lines_with_mode_and_background(
+        source.as_bytes(),
+        &styled,
+        color_mode,
+        preserve_terminal_background,
+    )
 }
 
 /// Clips cached styled lines to the current viewport bounds.
@@ -781,6 +1044,7 @@ fn diff_lines_to_patch(
     origin_row: usize,
     origin_col: usize,
     color_mode: ColorMode,
+    preserve_terminal_background: bool,
 ) -> String {
     let mut out = String::new();
     let line_count = prev_lines.len().max(curr_lines.len());
@@ -799,7 +1063,12 @@ fn diff_lines_to_patch(
         let absolute_row = origin_row0 + row + 1;
         let absolute_col = origin_col0 + diff_col;
         write_cup(&mut out, absolute_row, absolute_col);
-        append_styled_cells(&mut out, &curr[first_diff..], color_mode);
+        append_styled_cells(
+            &mut out,
+            &curr[first_diff..],
+            color_mode,
+            preserve_terminal_background,
+        );
 
         if curr.len() < prev.len() {
             out.push_str(EL_TO_END);
@@ -816,6 +1085,7 @@ fn diff_single_line_to_patch(
     prev_line: &[StyledCell],
     curr_line: &[StyledCell],
     color_mode: ColorMode,
+    preserve_terminal_background: bool,
 ) -> String {
     let mut out = String::new();
     let Some(first_diff) = first_diff_index(prev_line, curr_line) else {
@@ -826,7 +1096,12 @@ fn diff_single_line_to_patch(
     let prefix_width = display_columns_before(prev_line, first_diff);
     let cols_back = prev_width.saturating_sub(prefix_width);
     write_cub(&mut out, cols_back);
-    append_styled_cells(&mut out, &curr_line[first_diff..], color_mode);
+    append_styled_cells(
+        &mut out,
+        &curr_line[first_diff..],
+        color_mode,
+        preserve_terminal_background,
+    );
     if curr_line.len() < prev_line.len() {
         out.push_str(EL_TO_END);
     }
@@ -868,14 +1143,25 @@ fn write_cub(out: &mut String, cols: usize) {
 }
 
 /// Appends styled cells as text and SGR transitions.
-fn append_styled_cells(out: &mut String, cells: &[StyledCell], color_mode: ColorMode) {
+fn append_styled_cells(
+    out: &mut String,
+    cells: &[StyledCell],
+    color_mode: ColorMode,
+    preserve_terminal_background: bool,
+) {
     if cells.is_empty() {
         return;
     }
 
     let mut active_style = None;
     for cell in cells {
-        write_style_transition(out, active_style, cell.style, color_mode);
+        write_style_transition(
+            out,
+            active_style,
+            cell.style,
+            color_mode,
+            preserve_terminal_background,
+        );
         out.push_str(&cell.text);
         active_style = cell.style;
     }
@@ -891,6 +1177,7 @@ fn write_style_transition(
     previous: Option<Style>,
     next: Option<Style>,
     color_mode: ColorMode,
+    preserve_terminal_background: bool,
 ) {
     if previous == next {
         return;
@@ -900,13 +1187,17 @@ fn write_style_transition(
         (None, None) => {}
         (Some(_), None) => out.push_str(SGR_RESET),
         (None, Some(style)) => {
-            if let Some(open) = style_open_sgr(Some(style), color_mode) {
+            if let Some(open) =
+                style_open_sgr(Some(style), color_mode, preserve_terminal_background)
+            {
                 out.push_str(&open);
             }
         }
         (Some(_), Some(style)) => {
             out.push_str(SGR_RESET);
-            if let Some(open) = style_open_sgr(Some(style), color_mode) {
+            if let Some(open) =
+                style_open_sgr(Some(style), color_mode, preserve_terminal_background)
+            {
                 out.push_str(&open);
             }
         }
@@ -919,12 +1210,13 @@ fn append_styled_segment(
     text: &[u8],
     style: Option<Style>,
     color_mode: ColorMode,
+    preserve_terminal_background: bool,
 ) {
     if text.is_empty() {
         return;
     }
 
-    if let Some(open) = style_open_sgr(style, color_mode) {
+    if let Some(open) = style_open_sgr(style, color_mode, preserve_terminal_background) {
         out.push_str(&open);
         out.push_str(&String::from_utf8_lossy(text));
         out.push_str(SGR_RESET);
@@ -937,7 +1229,11 @@ fn append_styled_segment(
 /// Converts a style into an opening SGR sequence.
 ///
 /// Returns `None` when the style carries no terminal attributes.
-fn style_open_sgr(style: Option<Style>, color_mode: ColorMode) -> Option<String> {
+fn style_open_sgr(
+    style: Option<Style>,
+    color_mode: ColorMode,
+    preserve_terminal_background: bool,
+) -> Option<String> {
     let style = style?;
     let mut parts = Vec::new();
     if let Some(fg) = style.fg {
@@ -947,6 +1243,18 @@ fn style_open_sgr(style: Option<Style>, color_mode: ColorMode) -> Option<String>
             ColorMode::Ansi16 => format!("{}", ansi16_fg_sgr(rgb_to_ansi16(fg.r, fg.g, fg.b))),
         };
         parts.push(sgr);
+    }
+    if !preserve_terminal_background {
+        if let Some(bg) = style.bg {
+            let sgr = match color_mode {
+                ColorMode::TrueColor => format!("48;2;{};{};{}", bg.r, bg.g, bg.b),
+                ColorMode::Ansi256 => format!("48;5;{}", rgb_to_ansi256(bg.r, bg.g, bg.b)),
+                ColorMode::Ansi16 => {
+                    format!("{}", ansi16_bg_sgr(rgb_to_ansi16(bg.r, bg.g, bg.b)))
+                }
+            };
+            parts.push(sgr);
+        }
     }
     if style.bold {
         parts.push("1".to_string());
@@ -1054,6 +1362,15 @@ fn ansi16_fg_sgr(index: usize) -> u8 {
     }
 }
 
+/// Returns the ANSI SGR background code for a 16-color palette index.
+fn ansi16_bg_sgr(index: usize) -> u8 {
+    if index < 8 {
+        40 + index as u8
+    } else {
+        100 + (index as u8 - 8)
+    }
+}
+
 /// Returns the nearest ANSI cube level index and channel value.
 fn nearest_ansi_level(value: u8) -> (usize, u8) {
     let mut best_idx = 0usize;
@@ -1121,8 +1438,9 @@ fn validate_spans(source_len: usize, spans: &[StyledSpan]) -> Result<(), RenderE
 mod tests {
     use super::{
         highlight_lines_to_ansi_lines, highlight_to_ansi, render_ansi, render_ansi_lines,
-        render_ansi_with_mode, resolve_styled_spans, resolve_styled_spans_for_source, ColorMode,
-        IncrementalRenderer, RenderError, StreamLineRenderer, StyledSpan,
+        render_ansi_with_mode, render_ansi_with_mode_and_background, resolve_styled_spans,
+        resolve_styled_spans_for_source, ColorMode, IncrementalRenderer, RenderError,
+        StreamLineRenderer, StyledSpan,
     };
     use highlight_spans::{Attr, Grammar, HighlightResult, Span, SpanHighlighter};
     use theme_engine::{load_theme, Rgb, Style, Theme};
@@ -1142,6 +1460,40 @@ mod tests {
         }];
         let out = render_ansi(source, &spans).expect("failed to render");
         assert_eq!(out, "a\x1b[38;2;255;0;0;1mb\x1b[0mc");
+    }
+
+    #[test]
+    /// Verifies OSC helpers emit expected set/reset default color sequences.
+    fn emits_osc_default_color_sequences() {
+        let fg = Rgb::new(1, 2, 3);
+        let bg = Rgb::new(4, 5, 6);
+        assert_eq!(super::osc_set_default_foreground(fg), "\x1b]10;#010203\x07");
+        assert_eq!(super::osc_set_default_background(bg), "\x1b]11;#040506\x07");
+        assert_eq!(
+            super::osc_set_default_colors(Some(fg), Some(bg)),
+            "\x1b]10;#010203\x07\x1b]11;#040506\x07"
+        );
+        assert_eq!(super::osc_reset_default_foreground(), "\x1b]110\x07");
+        assert_eq!(super::osc_reset_default_background(), "\x1b]111\x07");
+        assert_eq!(
+            super::osc_reset_default_colors(),
+            "\x1b]110\x07\x1b]111\x07"
+        );
+    }
+
+    #[test]
+    /// Verifies OSC theme defaults fall back to `normal` style colors.
+    fn emits_osc_default_colors_from_theme() {
+        let theme = Theme::from_json_str(
+            r#"{
+  "styles": {
+    "normal": { "fg": { "r": 10, "g": 11, "b": 12 }, "bg": { "r": 13, "g": 14, "b": 15 } }
+  }
+}"#,
+        )
+        .expect("theme parse failed");
+        let osc = super::osc_set_default_colors_from_theme(&theme);
+        assert_eq!(osc, "\x1b]10;#0a0b0c\x07\x1b]11;#0d0e0f\x07");
     }
 
     #[test]
@@ -1270,6 +1622,44 @@ mod tests {
             out.contains("\x1b[94m"),
             "expected bright blue ANSI16 code, got {out:?}"
         );
+    }
+
+    #[test]
+    /// Verifies theme background colors are emitted when passthrough is disabled.
+    fn renders_theme_background_when_passthrough_disabled() {
+        let source = b"a";
+        let spans = [StyledSpan {
+            start_byte: 0,
+            end_byte: 1,
+            style: Some(Style {
+                fg: Some(Rgb::new(255, 0, 0)),
+                bg: Some(Rgb::new(1, 2, 3)),
+                ..Style::default()
+            }),
+        }];
+        let out = render_ansi_with_mode_and_background(source, &spans, ColorMode::TrueColor, false)
+            .expect("failed to render");
+        assert_eq!(out, "\x1b[38;2;255;0;0;48;2;1;2;3ma\x1b[0m");
+    }
+
+    #[test]
+    /// Verifies stream line renderer can emit themed background colors.
+    fn stream_line_renderer_emits_theme_background_when_enabled() {
+        let mut renderer = StreamLineRenderer::new();
+        renderer.set_preserve_terminal_background(false);
+        let spans = [StyledSpan {
+            start_byte: 0,
+            end_byte: 1,
+            style: Some(Style {
+                fg: Some(Rgb::new(255, 0, 0)),
+                bg: Some(Rgb::new(1, 2, 3)),
+                ..Style::default()
+            }),
+        }];
+        let patch = renderer
+            .render_line_patch(b"a", &spans)
+            .expect("initial stream patch failed");
+        assert_eq!(patch, "\x1b[38;2;255;0;0;48;2;1;2;3ma\x1b[0m");
     }
 
     #[test]
@@ -1522,6 +1912,27 @@ mod tests {
         assert!(patch.contains("\x1b[91m"));
         assert!(!patch.contains("38;2;"));
         assert!(!patch.contains("38;5;"));
+    }
+
+    #[test]
+    /// Verifies incremental renderer can emit themed background colors.
+    fn incremental_renderer_emits_theme_background_when_enabled() {
+        let mut renderer = IncrementalRenderer::new(120, 40);
+        renderer.set_preserve_terminal_background(false);
+        let spans = [StyledSpan {
+            start_byte: 0,
+            end_byte: 1,
+            style: Some(Style {
+                fg: Some(Rgb::new(255, 0, 0)),
+                bg: Some(Rgb::new(1, 2, 3)),
+                ..Style::default()
+            }),
+        }];
+
+        let patch = renderer
+            .render_patch(b"a", &spans)
+            .expect("patch generation failed");
+        assert!(patch.contains("\x1b[38;2;255;0;0;48;2;1;2;3ma"));
     }
 
     #[test]

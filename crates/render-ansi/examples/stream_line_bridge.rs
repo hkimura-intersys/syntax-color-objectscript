@@ -13,6 +13,7 @@ struct Options {
     theme_name: String,
     grammar_name: String,
     color_mode: ColorMode,
+    preserve_terminal_background: bool,
     previous_source_path: Option<String>,
 }
 
@@ -57,6 +58,7 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
         .unwrap_or_else(|| "objectscript".to_string());
 
     let mut color_mode = ColorMode::TrueColor;
+    let mut preserve_terminal_background = true;
     let mut previous_source_path: Option<String> = None;
     let mut i = 4usize;
     while i < args.len() {
@@ -75,6 +77,12 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
                 };
                 color_mode = parse_color_mode(value)?;
             }
+            "--theme-bg" => {
+                preserve_terminal_background = false;
+            }
+            "--terminal-bg" => {
+                preserve_terminal_background = true;
+            }
             flag => return Err(format!("unknown option '{flag}'")),
         }
         i += 1;
@@ -85,6 +93,7 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
         theme_name,
         grammar_name,
         color_mode,
+        preserve_terminal_background,
         previous_source_path,
     })
 }
@@ -93,7 +102,7 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
 fn print_usage() {
     eprintln!("Usage:");
     eprintln!(
-        "  cargo run -p render-ansi --example stream_line_bridge -- <source-file> [theme] [grammar] [--color-mode truecolor|ansi256|ansi16] [--prev <old-source-file>]"
+        "  cargo run -p render-ansi --example stream_line_bridge -- <source-file> [theme] [grammar] [--color-mode truecolor|ansi256|ansi16] [--theme-bg] [--prev <old-source-file>]"
     );
     eprintln!();
     eprintln!("Notes:");
@@ -106,6 +115,9 @@ fn print_usage() {
     );
     eprintln!(
         "  cargo run -p render-ansi --example stream_line_bridge -- new.sql tokyonight-dark sql --color-mode ansi16"
+    );
+    eprintln!(
+        "  cargo run -p render-ansi --example stream_line_bridge -- new.sql tokyonight-dark sql --theme-bg"
     );
 }
 
@@ -136,6 +148,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut highlighter = SpanHighlighter::new()?;
     let mut renderer = StreamLineRenderer::new();
     renderer.set_color_mode(options.color_mode);
+    renderer.set_preserve_terminal_background(options.preserve_terminal_background);
 
     if let Some(previous_source_path) = &options.previous_source_path {
         let previous_source = fs::read(previous_source_path)?;

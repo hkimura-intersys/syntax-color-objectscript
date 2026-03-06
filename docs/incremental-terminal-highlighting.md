@@ -198,6 +198,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Exact Usage: `vt_patch_bridge` CLI
 
+`vt_patch_bridge` now auto-selects renderer mode:
+
+1. With `--origin-row`: uses `IncrementalRenderer` (viewport-aware multiline diff).
+2. Without `--origin-row` and single-line snapshots: uses `StreamLineRenderer`.
+3. Without `--origin-row` and multiline snapshots: falls back to full render and emits relative clear/reposition before repaint.
+
 Prepare old/new snapshots:
 
 ```bash
@@ -236,6 +242,30 @@ cargo run -q -p render-ansi --example vt_patch_bridge -- \
   --width 120 --height 40 \
   --origin-row 4 --origin-col 7 \
   --color-mode ansi16 | sed -n l
+```
+
+Single-line auto mode (no origin):
+
+```bash
+cat > old.mac <<'EOF'
+set x = 2
+EOF
+
+cat > new.mac <<'EOF'
+set x = 23
+EOF
+
+cargo run -p render-ansi --example vt_patch_bridge -- \
+  new.mac tokyonight-dark objectscript \
+  --prev old.mac
+```
+
+Multiline auto-fallback mode (no origin):
+
+```bash
+cargo run -p render-ansi --example vt_patch_bridge -- \
+  /tmp/iris-new.sql tokyonight-dark sql \
+  --prev /tmp/iris-old.sql
 ```
 
 ## Using This in a Live IRIS Terminal Loop
@@ -289,6 +319,7 @@ Notes:
 - `StreamLineRenderer` expects single-line input (no `\n`).
 - Cursor must remain at end-of-line between updates.
 - This mode is safer for unknown wrap behavior but only supports line-local updates.
+- In `vt_patch_bridge`, multiline snapshots without `--origin-row` do not error; they use a full-rerender fallback patch.
 
 ## How To Determine Origin (`row`, `col`)
 
@@ -305,6 +336,7 @@ Origin must be terminal-global coordinates for where your editable buffer begins
 - Running incremental patch output directly in your normal shell prompt can overwrite visible prompt/history text. Use a controlled region/PTY.
 - Byte offsets from parsers are not terminal columns. Incremental renderer already converts to display-width columns.
 - If host wrap behavior differs from your provided `width`, patches can drift.
+- In auto-fallback full rerender mode (no `--origin-row` + multiline), clearing is based on logical `\n` lines, not terminal-wrapped rows.
 - If you diff across different IRIS `READ` lifecycles (for example Direct -> SQL shell) without `clear_state()`, patch output can drift.
 - If a screen region is redrawn externally without telling the renderer, call `clear_state()` to resynchronize.
 - If you cannot trust terminal width/wrap, prefer `StreamLineRenderer` (line-local mode) or full-frame rerender with `highlight_to_ansi`.

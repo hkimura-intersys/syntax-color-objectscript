@@ -95,9 +95,57 @@ pub struct Style {
     pub underline: bool,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum UiRole {
+    DefaultFg,
+    DefaultBg,
+    Statusline,
+    StatuslineInactive,
+    TabActive,
+    TabInactive,
+    Selection,
+    Cursorline,
+}
+
+impl UiRole {
+    /// Returns the canonical role key used in theme documents.
+    #[must_use]
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::DefaultFg => "default_fg",
+            Self::DefaultBg => "default_bg",
+            Self::Statusline => "statusline",
+            Self::StatuslineInactive => "statusline_inactive",
+            Self::TabActive => "tab_active",
+            Self::TabInactive => "tab_inactive",
+            Self::Selection => "selection",
+            Self::Cursorline => "cursorline",
+        }
+    }
+
+    /// Parses a UI role from a key or alias.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match normalize_capture_name(name).as_str() {
+            "default_fg" | "defaultfg" | "terminal_fg" | "terminalfg" => Some(Self::DefaultFg),
+            "default_bg" | "defaultbg" | "terminal_bg" | "terminalbg" => Some(Self::DefaultBg),
+            "statusline" | "status_line" => Some(Self::Statusline),
+            "statusline_inactive" | "status_line_inactive" | "statuslineinactive" => {
+                Some(Self::StatuslineInactive)
+            }
+            "tab_active" | "tabactive" | "tab" => Some(Self::TabActive),
+            "tab_inactive" | "tabinactive" => Some(Self::TabInactive),
+            "selection" => Some(Self::Selection),
+            "cursorline" | "cursor_line" => Some(Self::Cursorline),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct Theme {
     styles: BTreeMap<String, Style>,
+    ui: BTreeMap<String, Style>,
 }
 
 impl Theme {
@@ -110,9 +158,18 @@ impl Theme {
     /// Creates a theme from a style map after normalizing capture names.
     #[must_use]
     pub fn from_styles(styles: BTreeMap<String, Style>) -> Self {
+        Self::from_parts(styles, BTreeMap::new())
+    }
+
+    /// Creates a theme from syntax-style and UI-role maps after normalization.
+    #[must_use]
+    pub fn from_parts(styles: BTreeMap<String, Style>, ui: BTreeMap<String, Style>) -> Self {
         let mut theme = Self::new();
         for (name, style) in styles {
             let _ = theme.insert(name, style);
+        }
+        for (name, style) in ui {
+            let _ = theme.insert_ui(name, style);
         }
         theme
     }
@@ -132,10 +189,31 @@ impl Theme {
         &self.styles
     }
 
+    /// Inserts or replaces a UI role style.
+    ///
+    /// Role names are normalized like capture names.
+    /// Returns the previously associated style, if any.
+    pub fn insert_ui(&mut self, role_name: impl AsRef<str>, style: Style) -> Option<Style> {
+        self.ui
+            .insert(normalize_capture_name(role_name.as_ref()), style)
+    }
+
+    /// Returns the internal normalized UI role map.
+    #[must_use]
+    pub fn ui_styles(&self) -> &BTreeMap<String, Style> {
+        &self.ui
+    }
+
     /// Returns the exact style for a capture after normalization.
     #[must_use]
     pub fn get_exact(&self, capture_name: &str) -> Option<&Style> {
         self.styles.get(&normalize_capture_name(capture_name))
+    }
+
+    /// Returns the exact UI role style after normalization.
+    #[must_use]
+    pub fn get_ui_exact(&self, role_name: &str) -> Option<&Style> {
+        self.ui.get(&normalize_capture_name(role_name))
     }
 
     /// Resolves a style using dotted-name fallback and finally `normal`.
@@ -160,6 +238,103 @@ impl Theme {
         self.styles.get("normal")
     }
 
+    /// Resolves a UI role from explicit UI map entries with compatibility fallbacks.
+    ///
+    /// This method first checks the dedicated `ui` map, then falls back to legacy
+    /// entries in `styles` for compatibility with older themes.
+    #[must_use]
+    pub fn resolve_ui(&self, role_name: &str) -> Option<Style> {
+        let normalized = normalize_capture_name(role_name);
+        if let Some(style) = self.ui.get(&normalized).copied() {
+            return Some(style);
+        }
+        if let Some(style) = self.styles.get(&normalized).copied() {
+            return Some(style);
+        }
+
+        if let Some(role) = UiRole::from_name(&normalized) {
+            return self.resolve_ui_role(role);
+        }
+
+        None
+    }
+
+    /// Resolves a typed UI role from explicit UI entries and fallbacks.
+    #[must_use]
+    pub fn resolve_ui_role(&self, role: UiRole) -> Option<Style> {
+        let key = role.key();
+        if let Some(style) = self.ui.get(key).copied() {
+            return Some(style);
+        }
+        if let Some(style) = self.styles.get(key).copied() {
+            return Some(style);
+        }
+
+        match role {
+            UiRole::DefaultFg => self.styles.get("normal").and_then(|normal| {
+                normal.fg.map(|fg| Style {
+                    fg: Some(fg),
+                    ..Style::default()
+                })
+            }),
+            UiRole::DefaultBg => self.styles.get("normal").and_then(|normal| {
+                normal.bg.map(|bg| Style {
+                    bg: Some(bg),
+                    ..Style::default()
+                })
+            }),
+            UiRole::Statusline => self.styles.get("statusline").copied(),
+            UiRole::StatuslineInactive => self
+                .ui
+                .get("statusline_inactive")
+                .copied()
+                .or_else(|| self.styles.get("statusline_inactive").copied())
+                .or_else(|| self.styles.get("ignore").copied())
+                .or_else(|| self.styles.get("statusline").copied()),
+            UiRole::TabActive => self
+                .ui
+                .get("tab_active")
+                .copied()
+                .or_else(|| self.styles.get("tab_active").copied())
+                .or_else(|| self.styles.get("statusline").copied()),
+            UiRole::TabInactive => self
+                .ui
+                .get("tab_inactive")
+                .copied()
+                .or_else(|| self.styles.get("tab_inactive").copied())
+                .or_else(|| self.styles.get("ignore").copied())
+                .or_else(|| self.styles.get("statusline").copied()),
+            UiRole::Selection => self
+                .ui
+                .get("selection")
+                .copied()
+                .or_else(|| self.styles.get("selection").copied()),
+            UiRole::Cursorline => self
+                .ui
+                .get("cursorline")
+                .copied()
+                .or_else(|| self.styles.get("cursorline").copied())
+                .or_else(|| self.styles.get("selection").copied()),
+        }
+    }
+
+    /// Returns the theme default terminal foreground/background colors.
+    ///
+    /// Values are resolved from UI roles first (`default_fg`, `default_bg`), then
+    /// from `styles.normal`.
+    #[must_use]
+    pub fn default_terminal_colors(&self) -> (Option<Rgb>, Option<Rgb>) {
+        let fg = self
+            .resolve_ui_role(UiRole::DefaultFg)
+            .and_then(|style| style.fg)
+            .or_else(|| self.styles.get("normal").and_then(|style| style.fg));
+        let bg = self
+            .resolve_ui_role(UiRole::DefaultBg)
+            .and_then(|style| style.bg)
+            .or_else(|| self.styles.get("normal").and_then(|style| style.bg));
+        (fg, bg)
+    }
+
     /// Parses a theme from JSON.
     ///
     /// Both wrapped (`{ "styles": { ... } }`) and flat style documents are accepted.
@@ -169,7 +344,7 @@ impl Theme {
     /// Returns an error if the JSON cannot be parsed.
     pub fn from_json_str(input: &str) -> Result<Self, ThemeError> {
         let parsed = serde_json::from_str::<ThemeDocument>(input)?;
-        Ok(Self::from_styles(parsed.into_styles()))
+        Ok(parsed.into_theme())
     }
 
     /// Parses a theme from TOML.
@@ -179,7 +354,7 @@ impl Theme {
     /// Returns an error if the TOML cannot be parsed.
     pub fn from_toml_str(input: &str) -> Result<Self, ThemeError> {
         let parsed = toml::from_str::<ThemeDocument>(input)?;
-        Ok(Self::from_styles(parsed.into_styles()))
+        Ok(parsed.into_theme())
     }
 
     /// Loads a built-in theme from embedded JSON.
@@ -231,18 +406,27 @@ pub enum ThemeError {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WrappedThemeDocument {
+    #[serde(default)]
+    styles: BTreeMap<String, Style>,
+    #[serde(default)]
+    ui: BTreeMap<String, Style>,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum ThemeDocument {
-    Wrapped { styles: BTreeMap<String, Style> },
+    Wrapped(WrappedThemeDocument),
     Flat(BTreeMap<String, Style>),
 }
 
 impl ThemeDocument {
-    /// Converts a parsed document to its style map representation.
-    fn into_styles(self) -> BTreeMap<String, Style> {
+    /// Converts a parsed document to a normalized [`Theme`].
+    fn into_theme(self) -> Theme {
         match self {
-            ThemeDocument::Wrapped { styles } => styles,
-            ThemeDocument::Flat(styles) => styles,
+            ThemeDocument::Wrapped(doc) => Theme::from_parts(doc.styles, doc.ui),
+            ThemeDocument::Flat(styles) => Theme::from_styles(styles),
         }
     }
 }
@@ -261,7 +445,7 @@ pub fn normalize_capture_name(capture_name: &str) -> String {
 mod tests {
     use super::{
         available_themes, load_theme, normalize_capture_name, BuiltinTheme, Rgb, Style, Theme,
-        ThemeError,
+        ThemeError, UiRole,
     };
 
     #[test]
@@ -397,5 +581,81 @@ italic = true
                 "missing XML property style in {name}"
             );
         }
+    }
+
+    #[test]
+    /// Verifies wrapped documents can carry dedicated UI-role styles.
+    fn parses_ui_roles_from_wrapped_document() {
+        let input = r#"
+{
+  "styles": {
+    "normal": { "fg": { "r": 10, "g": 11, "b": 12 }, "bg": { "r": 13, "g": 14, "b": 15 } }
+  },
+  "ui": {
+    "default_fg": { "fg": { "r": 1, "g": 2, "b": 3 } },
+    "tab_active": { "fg": { "r": 20, "g": 21, "b": 22 }, "bg": { "r": 30, "g": 31, "b": 32 } }
+  }
+}
+"#;
+
+        let theme = Theme::from_json_str(input).expect("failed to parse json");
+        let default_fg = theme
+            .resolve_ui_role(UiRole::DefaultFg)
+            .expect("missing default fg");
+        assert_eq!(default_fg.fg, Some(Rgb::new(1, 2, 3)));
+
+        let tab = theme
+            .resolve_ui("tab_active")
+            .expect("missing tab_active role");
+        assert_eq!(tab.bg, Some(Rgb::new(30, 31, 32)));
+    }
+
+    #[test]
+    /// Verifies default terminal colors fall back to `normal` when UI roles are absent.
+    fn default_terminal_colors_fallback_to_normal() {
+        let theme = Theme::from_json_str(
+            r#"{
+  "styles": {
+    "normal": { "fg": { "r": 100, "g": 101, "b": 102 }, "bg": { "r": 110, "g": 111, "b": 112 } }
+  }
+}"#,
+        )
+        .expect("failed to parse json");
+
+        let (fg, bg) = theme.default_terminal_colors();
+        assert_eq!(fg, Some(Rgb::new(100, 101, 102)));
+        assert_eq!(bg, Some(Rgb::new(110, 111, 112)));
+    }
+
+    #[test]
+    /// Verifies UI role compatibility fallback uses legacy `styles` keys.
+    fn ui_role_falls_back_to_legacy_style_keys() {
+        let mut theme = Theme::new();
+        let _ = theme.insert(
+            "statusline",
+            Style {
+                fg: Some(Rgb::new(1, 1, 1)),
+                bg: Some(Rgb::new(2, 2, 2)),
+                ..Style::default()
+            },
+        );
+        let _ = theme.insert(
+            "ignore",
+            Style {
+                fg: Some(Rgb::new(3, 3, 3)),
+                bg: Some(Rgb::new(4, 4, 4)),
+                ..Style::default()
+            },
+        );
+
+        let active = theme
+            .resolve_ui_role(UiRole::TabActive)
+            .expect("missing active tab");
+        assert_eq!(active.bg, Some(Rgb::new(2, 2, 2)));
+
+        let inactive = theme
+            .resolve_ui_role(UiRole::TabInactive)
+            .expect("missing inactive tab");
+        assert_eq!(inactive.bg, Some(Rgb::new(4, 4, 4)));
     }
 }

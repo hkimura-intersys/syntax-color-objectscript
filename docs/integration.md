@@ -43,6 +43,10 @@ Set an origin offset when your editable region starts after a prompt.
 In IRIS, Direct mode and SQL shell are sequential `READ` loops, so keep one renderer for the
 active `READ`, switch grammar from your `$ZU()` mode signal, and call `clear_state()` when a new
 `READ` starts.
+`vt_patch_bridge` can auto-select mode:
+- with `--origin-row`: incremental viewport diff (`IncrementalRenderer`)
+- without `--origin-row` + single-line snapshots: stream-line diff (`StreamLineRenderer`)
+- without `--origin-row` + multiline snapshots: full-rerender fallback with relative clear/reposition
 For a full end-to-end walkthrough, see `docs/incremental-terminal-highlighting.md`.
 
 ```bash
@@ -78,6 +82,10 @@ If you multiplex independent PTYs/connections in one host process, keep a
 If terminal width/wrap cannot be trusted, use `StreamLineRenderer` for line-local
 relative updates (no absolute XY), or switch to full-frame rerender with
 `highlight_to_ansi(...)`.
+
+If you use `vt_patch_bridge` without `--origin-row`, the bridge now picks this automatically:
+- single-line -> stream-line relative patches
+- multiline -> full-rerender fallback patch
 
 ## 2) With a native C engine (no ANSI renderer)
 

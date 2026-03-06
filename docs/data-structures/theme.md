@@ -2,82 +2,97 @@
 
 ## Overview
 
-- `Theme` stores capture-name to `Style` mappings and resolves style lookups with normalization and fallback (`crates/theme-engine/src/lib.rs:82`, `crates/theme-engine/src/lib.rs:117`).
-- Primary consumers are renderer adapters and host code selecting built-in or custom theme documents (`crates/render-ansi/src/lib.rs:35`, `crates/theme-engine/src/lib.rs:160`).
+- `Theme` stores both syntax capture styles and UI-role styles, with normalized lookup and fallback behavior (`crates/theme-engine/src/lib.rs:145`, `crates/theme-engine/src/lib.rs:246`).
+- Primary consumers are ANSI render adapters and host-side paint engines (`crates/render-ansi/src/lib.rs:137`, `crates/render-ansi/src/lib.rs:652`).
 
 ## Scope
 
-- In scope: `theme-engine` type definitions and lookup behavior (`crates/theme-engine/src/lib.rs:67`, `crates/theme-engine/src/lib.rs:82`).
-- Out of scope: parser capture generation and terminal escape emission (`crates/highlight-spans/src/lib.rs:63`, `crates/render-ansi/src/lib.rs:163`).
+- In scope: `theme-engine` structures and lookup APIs (`crates/theme-engine/src/lib.rs:84`, `crates/theme-engine/src/lib.rs:145`).
+- Out of scope: syntax capture generation and renderer-specific escape emission (`crates/highlight-spans/src/lib.rs:118`, `crates/render-ansi/src/lib.rs:652`).
 
 ## Canonical Definition
 
-- Canonical definition: `Theme` wraps `styles: BTreeMap<String, Style>` (`crates/theme-engine/src/lib.rs:82`, `crates/theme-engine/src/lib.rs:83`).
-- Supporting definitions: `Style` (`fg`, `bg`, `bold`, `italic`, `underline`) and `Rgb` (`r`, `g`, `b`) (`crates/theme-engine/src/lib.rs:53`, `crates/theme-engine/src/lib.rs:67`).
+- Canonical definition: `Theme` wraps:
+  - `styles: BTreeMap<String, Style>` for syntax captures
+  - `ui: BTreeMap<String, Style>` for UI roles
+  (`crates/theme-engine/src/lib.rs:146`, `crates/theme-engine/src/lib.rs:148`).
+- Supporting definitions:
+  - `Style` (`fg`, `bg`, `bold`, `italic`, `underline`) (`crates/theme-engine/src/lib.rs:84`)
+  - `Rgb` (`r`, `g`, `b`) (`crates/theme-engine/src/lib.rs:69`)
+  - `UiRole` (`default_fg`, `default_bg`, `statusline`, `tab_*`, etc.) (`crates/theme-engine/src/lib.rs:98`)
 
 ## Fields and Types
 
-- `Theme.styles`: `BTreeMap<String, Style>` (`crates/theme-engine/src/lib.rs:83`).
-- `Style.fg` and `Style.bg`: optional `Rgb` values (`crates/theme-engine/src/lib.rs:70`, `crates/theme-engine/src/lib.rs:72`).
-- `Style.bold`, `Style.italic`, `Style.underline`: boolean flags defaulting to false (`crates/theme-engine/src/lib.rs:73`, `crates/theme-engine/src/lib.rs:74`, `crates/theme-engine/src/lib.rs:76`, `crates/theme-engine/src/lib.rs:78`).
-- Capture keys are normalized (trim, optional `@` strip, lowercase) before insert/get/resolve (`crates/theme-engine/src/lib.rs:101`, `crates/theme-engine/src/lib.rs:112`, `crates/theme-engine/src/lib.rs:193`).
+- `Theme.styles`: normalized syntax-style map (`crates/theme-engine/src/lib.rs:147`, `crates/theme-engine/src/lib.rs:188`).
+- `Theme.ui`: normalized UI-role style map (`crates/theme-engine/src/lib.rs:148`, `crates/theme-engine/src/lib.rs:203`).
+- `Style.fg` and `Style.bg`: optional `Rgb` colors (`crates/theme-engine/src/lib.rs:87`, `crates/theme-engine/src/lib.rs:89`).
+- `Style.bold`, `Style.italic`, `Style.underline`: boolean flags (`crates/theme-engine/src/lib.rs:91`, `crates/theme-engine/src/lib.rs:95`).
+- Keys are normalized (trim, optional `@` strip, lowercase) before insert/get/resolve (`crates/theme-engine/src/lib.rs:181`, `crates/theme-engine/src/lib.rs:196`, `crates/theme-engine/src/lib.rs:438`).
 
 ## Invariants
 
-- Keys inside the map are normalized capture names (`crates/theme-engine/src/lib.rs:103`, `crates/theme-engine/src/lib.rs:193`).
-- `resolve` falls back by trimming dotted suffixes, then to `normal` (`crates/theme-engine/src/lib.rs:125`, `crates/theme-engine/src/lib.rs:131`).
-- Built-in theme names are constrained to known constants/aliases (`crates/theme-engine/src/lib.rs:6`, `crates/theme-engine/src/lib.rs:33`).
+- Keys stored in both maps are normalized names (`crates/theme-engine/src/lib.rs:183`, `crates/theme-engine/src/lib.rs:198`).
+- `resolve` fallback order is dotted parent trimming, then `normal` (`crates/theme-engine/src/lib.rs:224`, `crates/theme-engine/src/lib.rs:238`).
+- `resolve_ui` checks dedicated `ui`, then compatibility fallbacks in `styles`, then typed role fallback (`crates/theme-engine/src/lib.rs:246`, `crates/theme-engine/src/lib.rs:264`).
+- Default terminal fg/bg comes from UI roles (`default_fg`, `default_bg`) with fallback to `styles.normal` (`crates/theme-engine/src/lib.rs:326`).
 
 ## Ownership and Responsibilities
 
-- `theme-engine` owns parsing, normalization, and style-lookup semantics (`crates/theme-engine/src/lib.rs:134`, `crates/theme-engine/src/lib.rs:139`, `crates/theme-engine/src/lib.rs:117`).
-- Renderers consume `Theme` and apply resulting styles to text segments (`crates/render-ansi/src/lib.rs:35`, `crates/render-ansi/src/lib.rs:47`).
+- `theme-engine` owns parse/normalize/lookup semantics for both syntax and UI roles (`crates/theme-engine/src/lib.rs:345`, `crates/theme-engine/src/lib.rs:246`).
+- Renderers and host bridges consume resolved styles; they do not own theme fallback logic (`crates/render-ansi/src/lib.rs:99`, `crates/theme-engine-ffi/src/lib.rs:191`).
 
 ## Lifecycle
 
-- Creation path: `Theme::new`, `from_styles`, `from_json_str`, `from_toml_str`, or built-in loaders (`crates/theme-engine/src/lib.rs:88`, `crates/theme-engine/src/lib.rs:93`, `crates/theme-engine/src/lib.rs:134`, `crates/theme-engine/src/lib.rs:144`).
-- Update path: `insert` normalizes key and replaces existing style when key already exists (`crates/theme-engine/src/lib.rs:101`, `crates/theme-engine/src/lib.rs:103`).
-- Deletion/retention path: no explicit delete API; callers can replace the whole `Theme` object (`crates/theme-engine/src/lib.rs:82`).
+- Creation path: `Theme::new`, `from_styles`, `from_parts`, `from_json_str`, `from_toml_str`, and built-in loaders (`crates/theme-engine/src/lib.rs:154`, `crates/theme-engine/src/lib.rs:160`, `crates/theme-engine/src/lib.rs:166`, `crates/theme-engine/src/lib.rs:345`, `crates/theme-engine/src/lib.rs:365`).
+- Update path: `insert` and `insert_ui` normalize and replace existing entries (`crates/theme-engine/src/lib.rs:181`, `crates/theme-engine/src/lib.rs:196`).
+- Deletion path: no explicit delete API; replace the `Theme` value when needed (`crates/theme-engine/src/lib.rs:145`).
 
 ## Update and Maintenance
 
-- Primary updates happen by editing built-in JSON files or custom input docs parsed at runtime (`crates/theme-engine/src/lib.rs:45`, `crates/theme-engine/src/lib.rs:134`).
-- Background jobs or batch processes: Not applicable (the module exposes synchronous in-process constructors/loaders only: `crates/theme-engine/src/lib.rs:134`, `crates/theme-engine/src/lib.rs:160`).
-- Migration strategy: preserve normalized key contract and `normal` fallback for backward-compatible theme behavior (`crates/theme-engine/src/lib.rs:131`, `crates/theme-engine/src/lib.rs:193`).
+- Built-in theme updates happen by editing JSON assets under `crates/theme-engine/themes` and reloading (`crates/theme-engine/src/lib.rs:57`).
+- Runtime theme docs can use wrapped schema (`styles` + optional `ui`) or flat legacy styles (`crates/theme-engine/src/lib.rs:408`, `crates/theme-engine/src/lib.rs:419`).
+- Migration strategy keeps legacy compatibility: UI role resolution falls back to legacy keys in `styles` (`crates/theme-engine/src/lib.rs:243`, `crates/theme-engine/src/lib.rs:286`).
 
 ## Storage and Access
 
-- Stored in-memory in a `BTreeMap`, giving deterministic key ordering for serialized/debug access (`crates/theme-engine/src/lib.rs:1`, `crates/theme-engine/src/lib.rs:83`).
-- Access paths: `get_exact` for direct lookup; `resolve` for hierarchical fallback (`crates/theme-engine/src/lib.rs:112`, `crates/theme-engine/src/lib.rs:117`).
+- Stored in-memory as two `BTreeMap`s for deterministic key order (`crates/theme-engine/src/lib.rs:1`, `crates/theme-engine/src/lib.rs:146`).
+- Access paths:
+  - Syntax: `get_exact`, `resolve` (`crates/theme-engine/src/lib.rs:209`, `crates/theme-engine/src/lib.rs:224`)
+  - UI: `get_ui_exact`, `resolve_ui`, `resolve_ui_role` (`crates/theme-engine/src/lib.rs:215`, `crates/theme-engine/src/lib.rs:246`, `crates/theme-engine/src/lib.rs:264`)
+  - Terminal defaults: `default_terminal_colors` (`crates/theme-engine/src/lib.rs:326`)
 
 ## APIs and Interfaces
 
-- Public APIs: `insert`, `styles`, `get_exact`, `resolve`, and constructors (`crates/theme-engine/src/lib.rs:101`, `crates/theme-engine/src/lib.rs:107`, `crates/theme-engine/src/lib.rs:117`).
-- Built-in interfaces: `available_themes`, `load_theme`, and enum-based `from_builtin` (`crates/theme-engine/src/lib.rs:155`, `crates/theme-engine/src/lib.rs:160`, `crates/theme-engine/src/lib.rs:144`).
+- Public APIs include constructors, insert/get/resolve methods, and default terminal-color helpers (`crates/theme-engine/src/lib.rs:151`, `crates/theme-engine/src/lib.rs:326`).
+- Built-in interfaces: `available_themes`, `load_theme`, and enum-based loading (`crates/theme-engine/src/lib.rs:381`, `crates/theme-engine/src/lib.rs:392`).
+- FFI surface exposes capture lookup, UI-role lookup, and default terminal fg/bg (`crates/theme-engine-ffi/src/lib.rs:149`, `crates/theme-engine-ffi/src/lib.rs:175`, `crates/theme-engine-ffi/src/lib.rs:204`).
 
 ## Usage Examples
 
-- Built-in theme loading: `load_theme("tokyo-night")` alias support is tested (`crates/theme-engine/src/lib.rs:160`, `crates/theme-engine/src/lib.rs:298`).
-- Fallback behavior: resolving `@comment.documentation` to `comment`, then to `normal` is tested (`crates/theme-engine/src/lib.rs:213`, `crates/theme-engine/src/lib.rs:235`).
+- Syntax lookup fallback (`comment.documentation -> comment -> normal`) is covered by tests (`crates/theme-engine/src/lib.rs:460`).
+- UI-role fallback (`tab_active`, `tab_inactive`, `statusline`) is covered by tests (`crates/theme-engine/src/lib.rs:632`).
+- Wrapped theme docs with explicit `ui` are covered by tests (`crates/theme-engine/src/lib.rs:588`).
 
 ## Pitfalls and Edge Cases
 
-- Unknown built-in names return `ThemeError::UnknownBuiltinTheme` (`crates/theme-engine/src/lib.rs:150`, `crates/theme-engine/src/lib.rs:173`).
-- Missing `normal` style means unresolved unknown captures may return `None` (`crates/theme-engine/src/lib.rs:131`).
-- Input format mismatch surfaces serde parse errors for JSON/TOML loaders (`crates/theme-engine/src/lib.rs:167`, `crates/theme-engine/src/lib.rs:169`).
+- Unknown built-in names return `ThemeError::UnknownBuiltinTheme` (`crates/theme-engine/src/lib.rs:405`).
+- Missing `normal` can cause unresolved syntax captures and weaker default terminal-color fallback (`crates/theme-engine/src/lib.rs:238`, `crates/theme-engine/src/lib.rs:330`).
+- Unknown UI role names return `None` unless matched by aliases/fallback keys (`crates/theme-engine/src/lib.rs:128`, `crates/theme-engine/src/lib.rs:259`).
+- Input format mismatches surface serde parse errors (`crates/theme-engine/src/lib.rs:399`, `crates/theme-engine/src/lib.rs:401`).
 
 ## Observability
 
 Not applicable.
 
-No built-in logging, metrics, or tracing for theme resolution paths (`crates/theme-engine/src/lib.rs:117`).
+No built-in logging/metrics/tracing in theme resolution paths (`crates/theme-engine/src/lib.rs:246`).
 
 ## Security and Privacy
 
-- Theme data contains color and style metadata only (`crates/theme-engine/src/lib.rs:67`).
-- Input parsing uses serde; malformed theme text is rejected with typed parse errors (`crates/theme-engine/src/lib.rs:167`, `crates/theme-engine/src/lib.rs:169`).
+- Theme data only contains style metadata (`crates/theme-engine/src/lib.rs:84`).
+- Parsing uses serde with typed error returns for malformed input (`crates/theme-engine/src/lib.rs:345`, `crates/theme-engine/src/lib.rs:355`).
 
 ## Assumptions
 
-- Consumers include a `normal` style for predictable fallback behavior.
-- Runtime callers treat `Theme` as immutable after setup, even though insertion is supported.
+- Consumers usually provide `normal` for predictable syntax and terminal-default fallback.
+- UI role entries are optional; missing roles rely on compatibility fallbacks to legacy style keys.
+- Hosts treat a loaded `Theme` as immutable configuration during a render session.

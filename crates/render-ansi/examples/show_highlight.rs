@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fs;
 
 use highlight_spans::Grammar;
-use render_ansi::{highlight_to_ansi_with_mode, ColorMode};
+use render_ansi::{highlight_to_ansi_with_mode_and_background, ColorMode};
 use theme_engine::load_theme;
 
 /// Parses a grammar argument and returns a human-friendly error on failure.
@@ -21,7 +21,7 @@ fn parse_grammar(input: &str) -> Result<Grammar, String> {
 fn print_usage() {
     eprintln!("Usage:");
     eprintln!(
-        "  cargo run -p render-ansi --example show_highlight -- <source-file> [theme] [grammar] [--color-mode truecolor|ansi256|ansi16]"
+        "  cargo run -p render-ansi --example show_highlight -- <source-file> [theme] [grammar] [--color-mode truecolor|ansi256|ansi16] [--theme-bg]"
     );
     eprintln!();
     eprintln!("Examples:");
@@ -37,6 +37,9 @@ fn print_usage() {
     );
     eprintln!(
         "  cargo run -p render-ansi --example show_highlight -- sample.sql tokyonight-dark sql --color-mode ansi16"
+    );
+    eprintln!(
+        "  cargo run -p render-ansi --example show_highlight -- sample.sql tokyonight-dark sql --theme-bg"
     );
 }
 
@@ -68,6 +71,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let theme_name = args.get(2).map(String::as_str).unwrap_or("tokyonight-dark");
     let grammar_name = args.get(3).map(String::as_str).unwrap_or("objectscript");
     let mut color_mode = ColorMode::TrueColor;
+    let mut preserve_terminal_background = true;
 
     let mut i = 4usize;
     while i < args.len() {
@@ -80,6 +84,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 color_mode =
                     parse_color_mode(value).map_err(|msg| format!("invalid color mode: {msg}"))?;
             }
+            "--theme-bg" => {
+                preserve_terminal_background = false;
+            }
+            "--terminal-bg" => {
+                preserve_terminal_background = true;
+            }
             flag => {
                 return Err(format!("unknown option '{flag}'").into());
             }
@@ -91,7 +101,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let source = fs::read(source_path)?;
     let theme = load_theme(theme_name)?;
 
-    let rendered = highlight_to_ansi_with_mode(&source, grammar, &theme, color_mode)?;
+    let rendered = highlight_to_ansi_with_mode_and_background(
+        &source,
+        grammar,
+        &theme,
+        color_mode,
+        preserve_terminal_background,
+    )?;
     println!("{rendered}");
 
     Ok(())

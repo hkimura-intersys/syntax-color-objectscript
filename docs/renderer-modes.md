@@ -2,6 +2,16 @@
 
 This guide shows how to use the three renderer modes in `render-ansi` and when to choose each one.
 
+## Bridge Auto Selection (`vt_patch_bridge`)
+
+The `vt_patch_bridge` example now auto-selects a mode from CLI args:
+
+1. With `--origin-row`: uses `IncrementalRenderer` (multiline viewport patching).
+2. Without `--origin-row` and single-line snapshots: uses `StreamLineRenderer`.
+3. Without `--origin-row` and multiline snapshots: falls back to full render and emits relative clear/reposition before repaint.
+
+Use this bridge behavior for quick host integration tests. For production hosts, prefer selecting renderer mode explicitly in code.
+
 ## Example UX-001: Full Rerender (Whole Frame)
 
 **Audience:** Developers rendering a complete highlighted frame each update.
@@ -68,8 +78,8 @@ fn render_full_ansi16(source: &[u8], theme: &Theme) -> Result<String, Box<dyn st
 
 ### Evidence
 
-- `crates/render-ansi/src/lib.rs:492` (`highlight_to_ansi`)
-- `crates/render-ansi/src/lib.rs:534` (`highlight_to_ansi_with_mode`)
+- `crates/render-ansi/src/lib.rs:652` (`highlight_to_ansi`)
+- `crates/render-ansi/src/lib.rs:694` (`highlight_to_ansi_with_mode`)
 - `crates/render-ansi/examples/show_highlight.rs:94` (real example usage)
 
 ### Validation Notes
@@ -165,9 +175,10 @@ fn patch_once(
 
 ### Evidence
 
-- `crates/render-ansi/src/lib.rs:71` (`IncrementalRenderer`)
-- `crates/render-ansi/src/lib.rs:166` (`highlight_to_patch`)
-- `crates/render-ansi/examples/vt_patch_bridge.rs:199` (real example usage)
+- `crates/render-ansi/src/lib.rs:137` (`IncrementalRenderer`)
+- `crates/render-ansi/src/lib.rs:249` (`highlight_to_patch`)
+- `crates/render-ansi/examples/vt_patch_bridge.rs:299` (incremental branch)
+- `crates/render-ansi/examples/vt_patch_bridge.rs:317` (multiline full-rerender fallback branch)
 
 ### Validation Notes
 
@@ -256,9 +267,9 @@ fn configure_stream(renderer: &mut StreamLineRenderer) {
 
 ### Evidence
 
-- `crates/render-ansi/src/lib.rs:185` (`StreamLineRenderer`)
-- `crates/render-ansi/src/lib.rs:239` (`highlight_line_to_patch`)
-- `crates/render-ansi/src/lib.rs:225` (`MultiLineInput` behavior)
+- `crates/render-ansi/src/lib.rs:268` (`StreamLineRenderer`)
+- `crates/render-ansi/src/lib.rs:342` (`highlight_line_to_patch`)
+- `crates/render-ansi/src/lib.rs:323` (`MultiLineInput` behavior)
 - `crates/render-ansi/examples/stream_line_bridge.rs:137` (real example usage)
 
 ### Validation Notes

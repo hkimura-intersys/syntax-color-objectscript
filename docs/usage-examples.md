@@ -248,7 +248,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Prerequisites
 
 - Dependencies: `render-ansi`, `highlight-spans`, `theme-engine`.
-- Config: Terminal width/height for viewport clipping; terminal origin row/col offset; theme name; grammar (`sql` for SQL shell content).
+- Config: Theme name; grammar (`sql` for SQL shell content); and either:
+  - explicit viewport mode (`--origin-row`, `--origin-col`, `--width`, `--height`)
+  - auto mode (omit `--origin-row`; bridge chooses stream-line or full-rerender fallback)
 - Permissions: Ability to write VT escape sequences to terminal stdout.
 
 ### Example (Minimal)
@@ -283,6 +285,11 @@ cargo run -p render-ansi --example vt_patch_bridge -- \
 3. The bridge highlights `iris-new.sql` and diffs it against previous styled cells.
 4. Output is a VT patch (cursor-move + style + erase sequences), not a full-frame render.
 5. Column movement uses display width (grapheme-aware), not raw byte count.
+
+**Auto-mode variant (no origin):**
+1. Omit `--origin-row` to let `vt_patch_bridge` choose automatically.
+2. Single-line snapshots use `StreamLineRenderer`.
+3. Multiline snapshots use full-rerender fallback plus relative clear/reposition patching.
 
 ### Example (Advanced)
 
@@ -355,17 +362,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Evidence
 
-- `crates/render-ansi/src/lib.rs:71` (`IncrementalRenderer` state)
-- `crates/render-ansi/src/lib.rs:105` (`clear_state`)
-- `crates/render-ansi/src/lib.rs:113` (`set_origin`)
-- `crates/render-ansi/src/lib.rs:166` (`highlight_to_patch`)
-- `crates/render-ansi/src/lib.rs:778` (display-width diff-to-patch implementation)
-- `crates/render-ansi/examples/vt_patch_bridge.rs:61` (CLI option parsing including `--prev`, origin, color mode)
+- `crates/render-ansi/src/lib.rs:137` (`IncrementalRenderer` state)
+- `crates/render-ansi/src/lib.rs:173` (`clear_state`)
+- `crates/render-ansi/src/lib.rs:181` (`set_origin`)
+- `crates/render-ansi/src/lib.rs:249` (`highlight_to_patch`)
+- `crates/render-ansi/src/lib.rs:1041` (display-width diff-to-patch implementation)
+- `crates/render-ansi/examples/vt_patch_bridge.rs:116` (CLI option parsing including `--prev`, origin, color mode)
+- `crates/render-ansi/examples/vt_patch_bridge.rs:299` (origin-row incremental branch)
+- `crates/render-ansi/examples/vt_patch_bridge.rs:317` (auto-mode multiline fallback)
 
 ### Validation Notes
 
 - Verified signature against code: Yes
-- Verified usage in tests or examples: Yes (`crates/render-ansi/examples/vt_patch_bridge.rs:199`, `crates/render-ansi/src/lib.rs:1458`)
+- Verified usage in tests or examples: Yes (`crates/render-ansi/examples/vt_patch_bridge.rs:230`, `crates/render-ansi/src/lib.rs:1838`)
 - Mismatches or assumptions: Assumes your IRIS host emits reliable `READ` boundary and mode (`$ZU()`) signals plus a clean text snapshot per update cycle.
 
 ## Doc/Code Mismatches
