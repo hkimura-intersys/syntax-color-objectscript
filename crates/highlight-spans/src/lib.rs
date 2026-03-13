@@ -17,7 +17,7 @@ const MARKDOWN_INLINE_HIGHLIGHTS_QUERY: &str = tree_sitter_md::HIGHLIGHT_QUERY_I
 const MARKDOWN_INLINE_INJECTIONS_QUERY: &str = tree_sitter_md::INJECTION_QUERY_INLINE;
 const XML_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_xml::LANGUAGE_XML;
 const XML_HIGHLIGHTS_QUERY: &str = tree_sitter_xml::XML_HIGHLIGHT_QUERY;
-const XML_OBJECTSCRIPT_INJECTIONS_QUERY: &str = r#"
+const XML_IMPLEMENTATION_INJECTIONS_QUERY: &str = r#"
 (
   element
     (STag (Name) @_start_tag)
@@ -160,12 +160,12 @@ impl SpanHighlighter {
     /// language configuration fails.
     pub fn new() -> Result<Self, HighlightError> {
         let objectscript_language: tree_sitter::Language =
-            tree_sitter_objectscript::LANGUAGE_OBJECTSCRIPT_PLAYGROUND.into();
+            tree_sitter_objectscript_playground::LANGUAGE_OBJECTSCRIPT.into();
         let mut objectscript = new_config(
             objectscript_language.clone(),
             "objectscript",
-            tree_sitter_objectscript::OBJECTSCRIPT_HIGHLIGHTS_QUERY,
-            tree_sitter_objectscript::OBJECTSCRIPT_INJECTIONS_QUERY,
+            tree_sitter_objectscript_playground::HIGHLIGHTS_QUERY,
+            tree_sitter_objectscript_playground::INJECTIONS_QUERY,
         )?;
         let mut sql = new_config(SQL_LANGUAGE.into(), "sql", SQL_HIGHLIGHTS_QUERY, "")?;
         let mut python = new_config(
@@ -190,12 +190,12 @@ impl SpanHighlighter {
         let mut xml = new_config(xml_language.clone(), "xml", XML_HIGHLIGHTS_QUERY, "")?;
         let objectscript_injection_query = tree_sitter::Query::new(
             &objectscript_language,
-            tree_sitter_objectscript::OBJECTSCRIPT_INJECTIONS_QUERY,
+            tree_sitter_objectscript_playground::INJECTIONS_QUERY,
         )?;
         let (objectscript_injection_content_capture, objectscript_injection_language_capture) =
             injection_capture_indices(&objectscript_injection_query);
         let xml_injection_query =
-            tree_sitter::Query::new(&xml_language, XML_OBJECTSCRIPT_INJECTIONS_QUERY)?;
+            tree_sitter::Query::new(&xml_language, XML_IMPLEMENTATION_INJECTIONS_QUERY)?;
         let (xml_injection_content_capture, xml_injection_language_capture) =
             injection_capture_indices(&xml_injection_query);
 
@@ -447,7 +447,7 @@ impl SpanHighlighter {
         source: &[u8],
     ) -> Result<Vec<InjectionRegion>, HighlightError> {
         let objectscript_language: tree_sitter::Language =
-            tree_sitter_objectscript::LANGUAGE_OBJECTSCRIPT_PLAYGROUND.into();
+            tree_sitter_objectscript_playground::LANGUAGE_OBJECTSCRIPT.into();
         self.find_injections(
             source,
             &objectscript_language,

@@ -16,7 +16,7 @@ Execution Status: Pending user approval.
   - `Theme::resolve`, `load_theme`
   - `resolve_styled_spans`, `render_ansi`, `render_ansi_lines`, `highlight_to_ansi`
 - External interfaces and dependencies:
-  - `tree-sitter` and `tree-sitter-objectscript` highlight query dependencies
+  - `tree-sitter` and `tree-sitter-objectscript-playground` highlight query dependencies
   - JSON/TOML parsing via serde/toml
 - Important stateful boundaries:
   - Byte-range span ordering and bounds

@@ -11,7 +11,7 @@ tree-sitter = ">=0.26.6"
 tree-sitter-highlight = ">=0.26.6"
 tree-sitter-language = "0.1.7"
 tree-sitter-md = "0.5.3"
-tree-sitter-objectscript = "1.4.3"
+tree-sitter-objectscript-playground = "1.5.1"
 tree-sitter-python = "0.25.0"
 tree-sitter-xml = "0.7.0"
 

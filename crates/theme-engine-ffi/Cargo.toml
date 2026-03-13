@@ -9,4 +9,4 @@ description = "C FFI bindings for theme-engine theme loading and style resolutio
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-theme-engine = { version = "0.5.0", path = "../theme-engine" }
+theme-engine = { version = "0.6.0", path = "../theme-engine" }

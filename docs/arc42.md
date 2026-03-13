@@ -10,7 +10,7 @@ Goal: keep parser output, theme lookup, and rendering concerns independently evo
 
 Technical constraints:
 - Rust 2021 workspace with resolver v2 (`Cargo.toml:3`, `Cargo.toml:6`).
-- Highlight extraction is constrained by Tree-sitter APIs and the `tree-sitter-objectscript` grammar package (`crates/highlight-spans/Cargo.toml:10`, `crates/highlight-spans/Cargo.toml:12`).
+- Highlight extraction is constrained by Tree-sitter APIs and the `tree-sitter-objectscript-playground` grammar package (`crates/highlight-spans/Cargo.toml:10`, `crates/highlight-spans/Cargo.toml:14`).
 - Theme ingestion is constrained to JSON/TOML serde parsing and built-in JSON assets (`crates/theme-engine/src/lib.rs:134`, `crates/theme-engine/src/lib.rs:139`, `crates/theme-engine/src/lib.rs:45`).
 
 Operational constraints:

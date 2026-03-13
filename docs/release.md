@@ -40,7 +40,7 @@ Edit workspace version in root `Cargo.toml`:
 
 ```toml
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 ```
 
 For the next release, change to `0.1.1`, `0.2.0`, etc.
