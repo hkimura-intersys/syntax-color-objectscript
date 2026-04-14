@@ -1,0 +1,6 @@
+Routine test.x [Type = mac]
+test
+/// testing
+#if 0
+#else
+ w "back into global"

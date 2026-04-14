@@ -28,7 +28,7 @@ crates/
   theme-engine/     # capture name -> style resolution + built-in theme loader
     themes/         # built-in JSON themes (tokyonight/solarized)
   render-ansi/      # styled ranges -> ANSI/VT escape output
-  theme-engine-ffi/ # C ABI wrapper around theme-engine
+  theme-engine-ffi/ # C ABI wrapper around theme-engine, highlight-spans, and render-ansi
 docs/
   architecture.md
   highlight-spans.md
@@ -88,9 +88,10 @@ Purpose:
 
 Purpose:
 
-- Expose `theme-engine` APIs to C hosts via a stable FFI layer.
-- Resolve both syntax capture styles and UI role styles from C.
-- Provide theme default terminal fg/bg colors for OSC 10/11 integration.
+- Expose the full syntax-color pipeline to C hosts via a stable FFI layer.
+- Load themes, run highlighting, and render ANSI/VT output from C.
+- Provide reusable incremental and single-line patch renderers for terminal UIs.
+- Preserve the existing theme-only entry points for style lookup and terminal default colors.
 - [Crate README](crates/theme-engine-ffi/README.md)
 
 ## Data Flow

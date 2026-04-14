@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="EMPTY_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/crates/highlight-spans/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/render-ansi/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/render-ansi/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/theme-engine-ffi/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/theme-engine/src" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

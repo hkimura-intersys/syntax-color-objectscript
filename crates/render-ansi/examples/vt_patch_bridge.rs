@@ -3,12 +3,12 @@ use std::error::Error;
 use std::fs;
 use std::io::{self, Write};
 
-use highlight_spans::{Grammar, SpanHighlighter};
-use render_ansi::{
-    highlight_to_ansi_with_highlighter_and_mode_and_background, ColorMode, IncrementalRenderer,
-    RenderError, StreamLineRenderer,
+use highlight_spans::highlight_structures::{Grammar, SpanHighlighter};
+use render_ansi::ansi_structures::{
+    ColorMode, IncrementalRenderer, RenderError, StreamLineRenderer, COLOR_MODE_NAMES,
 };
-use theme_engine::load_theme;
+use render_ansi::common::highlight_to_ansi;
+use theme_engine::common::load_theme;
 
 #[derive(Debug, Clone)]
 struct Options {
@@ -57,7 +57,7 @@ fn parse_color_mode(input: &str) -> Result<ColorMode, String> {
         format!(
             "unknown color mode '{}'; use one of: {}",
             input,
-            ColorMode::supported_names().join(", ")
+            COLOR_MODE_NAMES.join(", ")
         )
     })
 }
@@ -133,7 +133,7 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
     let mut origin_row_arg: Option<String> = None;
     let mut origin_col_arg: Option<String> = None;
     let mut color_mode = ColorMode::TrueColor;
-    let mut preserve_terminal_background = true;
+    let mut preserve_terminal_background = false;
     let mut previous_source_path: Option<String> = None;
     let mut i = 4usize;
     while i < args.len() {
@@ -315,13 +315,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             .is_some_and(|snapshot| snapshot.contains(&b'\n'));
 
         if source_is_multiline || previous_is_multiline {
-            let rendered = highlight_to_ansi_with_highlighter_and_mode_and_background(
-                &mut highlighter,
+            let rendered = highlight_to_ansi(
                 &source,
                 grammar,
                 &theme,
-                options.color_mode,
-                options.preserve_terminal_background,
+                Some(&mut highlighter),
+                Some(options.color_mode),
+                Some(options.preserve_terminal_background),
             )?;
             build_full_rerender_patch(rendered, previous_source.as_deref())
         } else {

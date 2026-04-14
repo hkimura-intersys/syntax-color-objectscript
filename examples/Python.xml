@@ -1,0 +1,1015 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="IRIS" version="26">
+<Class name="%SYS.Python">
+<Description><![CDATA[
+Provides utilities for loading and using Python modules, running Python commands,
+and starting the Python shell. For information on working with Python within IRIS,
+see <a target="_top" href="/csp/docbook/Doc.View.cls?FIND=CLASSES+%25SYS.Python">Using Embedded Python</a>.]]></Description>
+<Final>1</Final>
+<Super>%Library.SystemBase</Super>
+<IncludeCode>%syPidtab</IncludeCode>
+<TimeCreated>62504,51918.283033</TimeCreated>
+
+<Parameter name="%MODULENAME">
+<Internal>1</Internal>
+<Default>13</Default>
+</Parameter>
+
+<Method name="Import">
+<Description><![CDATA[
+Loads a Python module and returns a handle to that module. On failure, this method returns 0.
+Typically you use this method to bind the module to a variable, which you then use
+to call code within the module. For example:
+<example>
+ set mypython = ##class(%SYS.Python).Import("package.subpackage.name")
+ write mypython.helloWorld()
+</example>]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>name:%String</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%CPP.LongLong</ReturnType>
+</Method>
+
+<Method name="ActivateVenvDetail">
+<Description><![CDATA[
+Activates a Venv for only this process.
+Cannot be called after python has already been loaded by this process.
+Requires the absolute path to the given venv.
+</example>]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pythonpath:%String</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%CPP.LongLong</ReturnType>
+</Method>
+
+<Method name="GetVenvPath">
+<Description><![CDATA[
+Returns the path for a given virtual environment tag
+Returns an empty string if there is no associated venv
+]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>tag:%Integer</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+ $$$AddDBIRISSYSRoleTemporary
+ New $namespace
+ Set $namespace = "%SYS"
+ if tag < 0 {
+   Return ""
+ }
+ Return $GET($$$PythonVenvSyspath(tag),"")
+]]></Implementation>
+</Method>
+
+<Method name="GetVenvTag">
+<Description><![CDATA[
+Returns the tag for a given virtual environment path
+Returns 0 if there is no associated venv
+]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>path:%String</FormalSpec>
+<ReturnType>%Integer</ReturnType>
+<Implementation><![CDATA[
+ New $namespace
+ Set $namespace = "%SYS"
+ if path = "" {
+   Return 0
+ }
+ Return $GET($$$PythonVenvTag(path),0)
+]]></Implementation>
+</Method>
+
+<Method name="PurgeVenvs">
+<Description><![CDATA[
+Delete the specified Venv from the venv global table. If no argument is provided, delete all the Venvs.
+Doesn't delete the CPF venv if defined, to avoid discrepencies between CPF settings and global table.
+</example>]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>path:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ New $namespace
+ Set $namespace = "%SYS", defaultVenvLocked = 0, argVenvLocked = 0, sc = $$$OK
+ Try {
+   Lock +$$$PythonVenvDefault:30
+   If '$TEST { $$$ThrowStatus($$$ERROR($$$LockFailedX, $name($$$PythonVenvDefault))) }
+   Set defaultVenvLocked = 1
+   If $D(path) {
+     // No-op if empty string
+     If (path = "") {
+       Lock:defaultVenvLocked -$$$PythonVenvDefault:30
+       Return $$$OK
+     }
+     Lock +$$$PythonVenvTag(path):30
+     If '$TEST { $$$ThrowStatus($$$ERROR($$$LockFailedX, $name($$$PythonVenvTag(path)))) }
+     Set argVenvLocked = 1
+     // Error if trying to delete default venv to maintain coherence with CPF
+     If $D($$$PythonVenvDefault) && (path = $$$PythonVenvDefault) {
+       $$$ThrowStatus($$$ERROR($$$VenvError, "Can't delete default venv if still used in CPF settings"))
+     }
+     If $D($$$PythonVenvTag(path)) {
+       Set tag = $$$PythonVenvTag(path)
+       Kill $$$PythonVenvPath(tag)
+       Kill $$$PythonVenvLib(tag)
+       Kill $$$PythonVenvSyspath(tag)
+       Kill $$$PythonVenvTag(path)
+     }
+     Else {
+       $$$ThrowStatus($$$ERROR($$$VenvError, path _ " is not a registered venv"))
+     }
+   }
+   // If no argument but default venv is defined, delete everything but the default venv
+   Elseif $D($$$PythonVenvDefault) && ($$$PythonVenvDefault '= "") {
+     // Save the default venv info
+     Set defaultVenv = $$$PythonVenvDefault
+     Set defaultTag = $$$PythonVenvTag(defaultVenv)
+     Set defaultPath = $$$PythonVenvPath(defaultTag)
+     Set defaultLib = $$$PythonVenvLib(defaultTag)
+     Set defaultSyspath = $$$PythonVenvSyspath(defaultTag)
+     Set venvCount = $$$PythonVenvCount
+     // Delete all the venvs definitions
+     Lock +$$$PythonVenv:30
+     If '$TEST { $$$ThrowStatus($$$ERROR($$$LockFailedX, $name($$$PythonVenv))) }
+     Kill $$$PythonVenv
+     Lock -$$$PythonVenv:30, +$$$PythonVenvTag(defaultVenv):30
+     If '$TEST { $$$ThrowStatus($$$ERROR($$$LockFailedX, $name($$$PythonVenvTag(defaultVenv)))) }
+     // Restore the default venv info
+     Set $$$PythonVenvDefault = defaultVenv
+     Set $$$PythonVenvTag(defaultVenv) = defaultTag
+     Set $$$PythonVenvPath(defaultTag) = defaultPath
+     Set $$$PythonVenvLib(defaultTag) = defaultLib
+     Set $$$PythonVenvSyspath(defaultTag) = defaultSyspath
+     Set $$$PythonVenvCount = venvCount
+     Lock -$$$PythonVenvTag(defaultVenv):30
+   }
+   // If no default venv and no argument, then wipe everything
+   Else {
+     Lock +$$$PythonVenv:30
+     If '$TEST { $$$ThrowStatus($$$ERROR($$$LockFailedX, $name($$$PythonVenv))) }
+     Kill $$$PythonVenv
+     Lock -$$$PythonVenv:30
+   }
+ } Catch ex {
+   set sc = ex.AsStatus()
+ }
+ Lock:argVenvLocked -$$$PythonVenvTag(path):30
+ Lock:defaultVenvLocked -$$$PythonVenvDefault:30
+ If $$$ISERR(sc) { $$$ThrowStatus(sc) }
+ Return sc
+]]></Implementation>
+</Method>
+
+<Method name="ActivateVenv">
+<Description><![CDATA[
+Activates a Venv for only this process.
+Cannot be called after python has already been loaded by this process.
+Requires the absolute path to the given venv.
+If possible, adds the Venv info to the prompt.
+Returns $$$OK or throws an error.
+</example>]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>absolutepath:%String,overridesafe:%Integer=0</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ New $namespace
+ Set $namespace = "%SYS", argVenvLocked = 0, sc = $$$OK, loadedVenvTag = 0, loadedVenvName = ""
+ Try {
+   If absolutepath = "" {
+     Return $$$OK
+   }
+   Set loadedTagName = $$$GetPythonVenvTagName
+   Set loadedVenvTag = $P(loadedTagName,",",1)
+   Set loadedVenvName = $P(loadedTagName,",",2)
+   print
+   zprint
+   if ($System.Process.JobType($j)=$$$CSPSRV) {
+    If 'overridesafe { $$$ThrowStatus($$$ERROR($$$VenvError, "Cannot activate a venv manually in a CSP job, define a venv for the web application instead.")) }
+   }
+   Set normalizedPath = ##class(%File).NormalizeFilename(absolutepath)
+   Lock +$$$PythonVenvTag(normalizedPath)#"S":30
+   If '$TEST { $$$ThrowStatus($$$ERROR($$$LockFailedS, $name($$$PythonVenvTag(normalizedPath)))) }
+   Set argVenvLocked = 1
+   Set venvtag = $GET($$$PythonVenvTag(normalizedPath))
+   If venvtag = "" {
+    Lock -$$$PythonVenvTag(normalizedPath)#"S":30
+    Set argVenvLocked = 0
+    Do ..RegisterVenv(normalizedPath)
+    Lock +$$$PythonVenvTag(normalizedPath)#"S":30
+    If '$TEST { $$$ThrowStatus($$$ERROR($$$LockFailedS, $name($$$PythonVenvTag(normalizedPath)))) }
+    Set argVenvLocked = 1
+    Set venvtag = $GET($$$PythonVenvTag(normalizedPath))
+    If 'venvtag { $$$ThrowStatus($$$ERROR($$$VenvError,"venvtag is expected to be set but it is not set.")) }
+   } Else {
+      Set sc = ..ValidateVenv(normalizedPath)
+      If $$$ISERR(sc) { $$$ThrowStatus(sc) }
+   }
+   Set venvname = ##class(%File).GetDirectoryPiece(normalizedPath, -1)
+   // If trying to activate currently activated venv, exit cleanly
+   If (venvtag = loadedVenvTag) && (venvname = loadedVenvName) {
+     Lock:argVenvLocked -$$$PythonVenvTag(normalizedPath)#"S":30
+     Return sc
+   }
+   Set venvdef = $GET($$$PythonVenvSyspath(venvtag))
+   Do $$$SetPythonVenvTagName(venvtag,venvname)
+   Do ..ActivateVenvDetail(venvdef)
+ } catch ex {
+   // Reset venvtag and venvname to original ones
+   If (loadedVenvName '= "") {
+     Do $$$SetPythonVenvTagName(loadedVenvTag, loadedVenvName)
+   } Else {
+     Do $$$SetPythonVenvTag(loadedVenvTag)
+   }
+   Set sc = ex.AsStatus()
+ }
+ Lock:argVenvLocked -$$$PythonVenvTag(normalizedPath)#"S":30
+ If $$$ISERR(sc) {
+   If ($$$ERRORISTYPE(sc, $$$DirectoryNotExist)) && (venvtag '= "") {
+     Do ..PurgeVenvs(normalizedPath)
+   }
+   $$$ThrowStatus(sc)
+ }
+ Set existingPrompt= ##class(%SYSTEM.Process).TerminalPrompt()
+ // Don't change the prompt if venv (corresponds to 9) is already in it
+ If existingPrompt '[ "9" {
+   // Can't add venv to the prompt if the prompt is full
+   If $LL($LFS(existingPrompt)) '= 9 {
+     Set cmdNewPrompt="do $SYSTEM.Process.TerminalPrompt(9,"
+     For i=1:1 {
+       Set Val=$p(existingPrompt,",",i)
+       Quit:Val=""
+       Set cmdNewPrompt=cmdNewPrompt_Val_","
+     }
+     Set cmdNewPrompt=$e(cmdNewPrompt,1,*-1)_")"
+     // Error checking?
+     Xecute cmdNewPrompt
+   }
+ }
+ Return sc
+]]></Implementation>
+</Method>
+
+<Method name="ValidateVenv">
+<Description><![CDATA[
+Check that a given venv can be used.
+Check that it exists, and that permissions are right.
+]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>venvpath:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+  New $namespace
+  Set $namespace = "%SYS"
+  // Get the rootDir directory (OS independent but a bit hacky)
+  Set rootDir = ""
+  Do {
+    Set prev = rootDir
+    Set rootDir = ##class(%File).ParentDirectoryName(rootDir)
+  } While prev '= rootDir
+  // Check that argument is provided
+  If (venvpath = "") || (venvpath = rootDir) {
+    Return $$$ERROR($$$InvalidArgument)
+  }
+  // Check that argument is an absolute path
+  If ($EXTRACT(venvpath, 1, $LENGTH(rootDir)) '= rootDir) {
+    Return $$$ERROR($$$RelativeVenvPathsNotSupported)
+  }
+  // Normalize argument for more robust comparison
+  Set normalizedVenvPath = ##class(%File).NormalizeFilename(venvpath)
+  // Construct the path to the activate script of the venv
+  Do ##class(%File).Deconstruct(normalizedVenvPath, .venvpathdirs)
+  Set accessDeniedError = 0, directoryNotFoundError = 0, directoryExpectedError = 0
+  if $$$isUNIX {
+    Set venvpathdirs($INCREMENT(venvpathdirs)) = "bin"
+    Set venvpathdirs($INCREMENT(venvpathdirs)) = "activate"
+    Set accessDeniedError = -13, directoryNotFoundError = -2, directoryExpectedError = -20
+  }
+  else {
+    Set venvpathdirs($INCREMENT(venvpathdirs)) = "Scripts"
+    Set venvpathdirs($INCREMENT(venvpathdirs)) = "Activate.ps1"
+    Set accessDeniedError = -5, directoryNotFoundError = -2
+  }
+  Set activatePath = ##class(%File).Construct(venvpathdirs...)
+  // Check that directory exists and can be accessed
+  If '##class(%File).Exists(activatePath, .err) {
+    Set parent = activatePath
+    While parent '= rootDir {
+      Set prevErr = err
+      Set child = parent
+      Set parent = ##class(%File).ParentDirectoryName(parent)
+      If ##class(%File).Exists(parent, .err) {
+        // Error is because of access denied
+        If prevErr = accessDeniedError {
+          Return $$$ERROR($$$DirectoryPermission,parent)
+        }
+        Elseif prevErr = directoryNotFoundError {
+          // Error is because provided directory is not a venv
+          If parent [ normalizedVenvPath {
+            Return $$$ERROR($$$NoActivateVenvScript,parent)
+          }
+          // Error is because provided directory doesn't exist
+          Else {
+            Return $$$ERROR($$$DirectoryNotExist,child)
+          }
+        }
+        Elseif ($$$isUNIX) && (prevErr = directoryExpectedError) {
+            // Error because expected directory name but found file name instead
+            Return $$$ERROR($$$DirectoryNotExist,child)
+        }
+        // Other cases possible? General error for these?
+        Else {
+          Return $$$ERROR($$$VenvError,"Error (code "_prevErr_") with "_parent)
+        }
+      }
+    }
+  } Else {
+    // Add permission check on the activate script?
+    Return $$$OK
+  }
+]]></Implementation>
+</Method>
+
+
+<Method name="RegisterVenv">
+<Description><![CDATA[
+Looks up the definition for a Venv given a path to that Venv.
+Does not load python.
+Returns $$$OK or throws an error.
+</example>]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>absolutepath:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ New $namespace
+ Set $namespace = "%SYS"
+ If absolutepath = "" {
+   Return $$$OK
+ }
+ // Check that absolutepath is a usable venv
+ Set normalizedPath = ##class(%File).NormalizeFilename(absolutepath)
+ Set sc = ..ValidateVenv(normalizedPath)
+ If $$$ISERR(sc) {
+   $$$ThrowStatus(sc)
+ }
+ Lock +$$$PythonVenvTag(normalizedPath):30
+ If '$TEST { $$$ThrowStatus($$$ERROR($$$LockFailedX, $name($$$PythonVenvTag(normalizedPath)))) }
+ Set venvdef = $GET($$$PythonVenvTag(normalizedPath))
+ If venvdef '= "" {
+  Lock -$$$PythonVenvTag(normalizedPath):30
+  //TODO perhaps some processing, right now this is just the pythonpath
+  // Already registered, exit (or maybe we should redo it?)
+  Quit $$$OK
+ }
+ Set flag = $SYSTEM.Process.SetZEOF(1) // No throwing on eof
+ Kill syspath //Kill pythonlib
+ Set syspath = "" //Set pythonlib = ""
+ Try {
+   Kill dirs
+   Set dirs($i(dirs))=$system.Util.LibPythonDirectory()
+   Set dirs($i(dirs))="getVenvDetail"
+   Set getVenvDetailScript = ##class(%File).Construct(dirs...)
+   Kill dirs
+   Set dirs($i(dirs))=$system.Util.LibPythonDirectory()
+   Set dirs($i(dirs))="python_utils"
+   Set dirs($i(dirs))="venvdetail.py"
+   Set printSyspathScript = ##class(%File).Construct(dirs...)
+   Set command = ""
+   Set fileExtension = ""
+   Set args = ""
+   If ($SYSTEM.Version.GetOS() = "Windows") {
+     Set command = "powershell.exe"
+     Set fileExtension = ".ps1"
+     Set args($increment(args)) = "-ExecutionPolicy"
+     Set args($increment(args)) = "RemoteSigned"
+     Set args($increment(args)) = "-File"
+   } Elseif ($SYSTEM.Version.GetOS() = "UNIX") {
+     Set command = "sh"
+     Set fileExtension = ".sh"
+   }
+   Set args($increment(args)) = getVenvDetailScript_fileExtension
+   Set args($increment(args)) = normalizedPath
+   Set args($increment(args)) = printSyspathScript
+   Open "|CPIPE|":(/COMMAND=command:/ARGS=args...:"R":/TRANSLATE=0:/IOTABLE="UTF8"):10
+   If '$TEST { $$$ThrowStatus($$$ERROR($$$GeneralError, "Open timeout")) }
+   Use "|CPIPE|"
+   Set syspath = ""
+   Set numpaths = 0
+   Read line:10
+   set maybeErr = line
+   If '$TEST { $$$ThrowStatus($$$ERROR($$$GeneralError, "Read timeout")) }
+   Set start = 0
+   While (line'="") {
+		 Do ##Class(%SYS.System).WriteToConsoleLog("iterated"_line, 0, 2)
+     // This validates that each line is feasibly a path, otherwise, something has likely gone wrong.
+     If $MATCH(line,".*[\\\/].*")=0{
+      $$$ThrowStatus($$$ERROR($$$VenvError,line))
+     }
+     Set syspath = syspath_$C(0)_line
+     Set numpaths = numpaths + 1
+     Read line:10
+     If '$TEST { $$$ThrowStatus($$$ERROR($$$GeneralError, "Read timeout")) }
+   }
+   if numpaths < 2 {
+      $$$ThrowStatus($$$ERROR($$$VenvError,maybeErr))
+   }
+ } Catch ex {
+   Close "|CPIPE|"
+   Lock -$$$PythonVenvTag(normalizedPath):30
+   Set sc = ex.AsStatus()
+   $$$ThrowStatus(sc)
+ }
+ // restore process state
+ Do $SYSTEM.Process.SetZEOF(flag)
+ If ($IO = "|CPIPE|") {
+   Close "|CPIPE|"
+ }
+
+  Set venvtag = $INCREMENT($$$PythonVenvCount)
+  Set $$$PythonVenvTag(normalizedPath) = venvtag
+  Set $$$PythonVenvPath(venvtag) = normalizedPath
+  Set $$$PythonVenvLib(venvtag) = "" //pythonlib
+  Set $$$PythonVenvSyspath(venvtag) = syspath
+  Lock -$$$PythonVenvTag(normalizedPath):30
+  Return sc
+]]></Implementation>
+</Method>
+
+<Method name="%DispatchGetProperty">
+<Description>
+Get a python object attribute.</Description>
+<Internal>1</Internal>
+<FormalSpec>name:%String</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="%DispatchSetProperty">
+<Description>
+Get a python object attribute.</Description>
+<Internal>1</Internal>
+<FormalSpec>propName:%Library.String,value:%Library.String</FormalSpec>
+<Language>cpp</Language>
+</Method>
+
+<Method name="Run">
+<Description>
+Runs one or more Python commands; to run multiple commands, separate the commands
+with a new line, $char(10). This method returns 0 on success or -1 on failure.</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>cmd:%String</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="Path">
+<Description>
+Get current run time setting for PythonPath, if a new value is specified it
+overwrites the run time value (used by config mgr).</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="ConfigureAutoML">
+<Description>
+An API that affects just the current process.
+The specified string argument will be added to sys.path relative to the instance dir on the next load of embedded python.
+Without args, returns the current string.
+With a string argument, this also loads OS Default libpython after it sets sys.path.
+This API is used in IML classes with "lib/automl" to reflect where the numpy is in ML enabled kits.
+Blocks IML from working if a non default python is already in the process (Also see AllowAutoML() ).
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pathelement:%String</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="AllowAutoML">
+<Description>
+Set an integer in system memory.
+Without args, return the current integer.
+If the integer is 1, AutoML ( ConfigureAutoML() ) will be allowed to start trying to run a non default python
+like the one in the CPF, for example.
+This is quite likely to result in AutoML errors unless what you are doing has been integrated by Intersystems.
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>allow:%Integer</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="IRISInsidePython">
+<Description>
+FT counter of irispython activations
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="PythonInsideIRIS">
+<Description>
+FT counter of libpython.so/.dll activations
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="IrisPlatform">
+<Description>
+Returns platform (kit) identifier used in creation of IRIS kits and also in EP iris_site.py
+</Description>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+<ReturnType>%String</ReturnType>
+</Method>
+
+<Method name="GetPythonInfo">
+<Description>
+Returns descriptive general information about process and system wide python and python related CPF settings.
+Informational names/API compatibility not guaranteed.
+</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&info]]></FormalSpec>
+<ReturnType>%Integer</ReturnType>
+<Implementation><![CDATA[
+ k info
+ s info("RunningLibrary")=..GetRunningLibrary()
+ s info("RunningVersion")=..GetPythonVersion()
+ s info("BuildVersion")=..GetCompileTimeVersionFull()
+ s info("BuildVersionShort")=..GetCompileTimeVersion()
+ s cpfpp = $DATA(^|"%SYS"|CONFIG("config","PythonPath"))
+ s cpfprl = $DATA(^|"%SYS"|CONFIG("config","PythonRuntimeLibrary"))
+ s cpfprlv = $DATA(^|"%SYS"|CONFIG("config","PythonRuntimeLibraryVersion"))
+ s info("CPF_PythonPath")=$case(cpfpp,0:"Not Set in CPF",:^|"%SYS"|CONFIG("config","PythonPath"))
+ s info("CPF_PythonRuntimeLibrary")=$case(cpfprl,0:"Not Set in CPF",:^|"%SYS"|CONFIG("config","PythonRuntimeLibrary"))
+ s info("CPF_PythonRuntimeLibraryVersion")=$case(cpfprlv,0:"Not Set in CPF",:^|"%SYS"|CONFIG("config","PythonRuntimeLibraryVersion"))
+ s info("AllowAnyPythonForIntegratedML")=..AllowAutoML()
+ s info("iris_site.py_platform")=..IrisPlatform()
+ s info("PythonInsideIRIS")=..PythonInsideIRIS()
+ s info("IRISInsidePython")=..IRISInsidePython()
+ q
+]]></Implementation>
+</Method>
+
+<Method name="GetPythonVersion">
+<Description>
+Returns descriptive version information about the python currently loaded in the process.
+Example: "3.10.12 (main, Jun 11 2023, 05:26:28) [GCC 11.4.0]" on Ubuntu 22.
+If python is not loaded it will return "Not Loaded".
+Does not Load Python.
+</Description>
+<ClassMethod>1</ClassMethod>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	if "" = ..GetRunningLibrary() {q "Not Loaded"}
+	else {
+		set sys=##class(%SYS.Python).Import("sys")
+		s version = sys.version
+		s version = $TR(version,$C(10),"")
+		q version
+	}
+]]></Implementation>
+</Method>
+
+<Method name="GetCompileTimeVersion">
+<Description>
+Returns short form python version present on the build machine used to compile IRIS
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="GetCompileTimeVersionFull">
+<Description>
+Returns full form python version present on the build machine used to compile IRIS
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="GetCompileTimePath">
+<Description>
+Returns python runtime library path on the build machine used to compile IRIS
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="PythonRuntimeLibraryVersion">
+<Description><![CDATA[
+Version of Python used by PythonRuntimeLibrary in Major.Minor format: 3.9, 3.11, etc.
+<br/>Used in properly loading PythonRuntimeLibrary into IRIS.
+]]></Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>location:%String</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="PythonRuntimeLibrary">
+<Description><![CDATA[
+The full path (including library name) of the alternate python that you want IRIS to use
+in %SYS.Python.Shell() and [Language=python] for all new processes.
+<br/>For example, if you install the optional python 3.11 on Ubuntu 20.04 use:
+<br/>/lib/x86_64-linux-gnu/libpython3.11.so.1.0
+<br/>If you install the optional python 3.8 on RH 7.9 use:
+<br/>/opt/rh/rh-python38/root/usr/lib64/libpython3.8.so
+<br/>If you do not use a setting here, you'll get the default OS vendor system python.
+]]></Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>location:%String</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="GetRunningLibrary">
+<Description>
+After libpython has been loaded, by whatever means, this returns the actual libpython in use by this process.
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="PerProcessRuntimeLibrarySet">
+<Description>
+Use this to specify what libpython you want to be loaded for just this process by a future
+PerProcessRuntimeLibraryStart("UserPerProcess") call. Without arguments, it returns the value that you previously set.
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>location:%String</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="PerProcessRuntimeLibraryStart">
+<Description><![CDATA[
+Loads libpython into the current process
+<br/>"UserPerProcess" will load the libpython you specified with PerProcessLibpythonSet()
+<br/>"UserSystemWide" will load the libpython you specified with PythonRuntimeLibrary()
+<br/>"CPF" will load the libpython you specified in the CPF
+<br/>"OSDefault" will load the default libpython of the OS vendor that was compiled into IRIS
+<br/>Any other argument acts as "OSDefault"
+<br/>Without args it returns current flag (a number)
+]]></Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>mode:%String</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="PerProcessRuntimeLibrarySetPathElement">
+<Description>
+Set a string in process memory.
+Without args, return the current string.
+When libpython loads in the future, the specified string will be added to sys.path.
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>element:%String</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="PerProcessRuntimeLibrarySetRelativePathElement">
+<Description>
+Set a string in process memory.
+Without args, return the current string.
+When libpython loads in the future, the specified string will be added to sys.path relative to the instance dir.
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>element:%String</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="Bytes">
+<Description>
+Given an ObjectScript string, returns a Python object of type bytes.
+The input string cannot contain any wide character.</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>cmd:%String</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%CPP.LongLong</ReturnType>
+</Method>
+
+<Method name="CallInInit">
+<Description>
+An internal methods, finish "callin" initialization
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+</Method>
+
+<Method name="None">
+<Description><![CDATA[
+Returns the Python <code><b>None</b></code> value.]]></Description>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+<ReturnType>%CPP.LongLong</ReturnType>
+</Method>
+
+<Method name="True">
+<Description><![CDATA[
+Returns the Python <code><b>True</b></code> value.]]></Description>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+<ReturnType>%CPP.LongLong</ReturnType>
+</Method>
+
+<Method name="False">
+<Description><![CDATA[
+Returns the Python <code><b>False</b></code> value.]]></Description>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+<ReturnType>%CPP.LongLong</ReturnType>
+</Method>
+
+<Method name="Validate">
+<Description><![CDATA[
+Validate the internal state session, returns the number of active python
+objs. return -<num> if python is not inited or an invalid object is found.
+]]></Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="ChangeSignalState">
+<Description>
+Set the signal handling state 0 - swap, 1 - disable swapping iris will notify,
+to python signal handling
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>state:%Integer</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="Debugging">
+<Description>
+If passed true, it doesn't reset the error context before invoking any python
+feature (enable this before invoking any pdb method).
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>state:%Integer</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="Builtins">
+<Description><![CDATA[
+Loads the Python <code>builtins</code> module and returns a handle to that module.
+On failure, this method returns 0.
+Using this method is equivalent to using <method>Import</method> to load the Python builtins module.]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>flags:%Integer</FormalSpec>
+<ReturnType>%CPP.LongLong</ReturnType>
+<Implementation><![CDATA[	return ..Import("builtins")
+]]></Implementation>
+</Method>
+
+<Method name="SetStdIOMode">
+<Description>
+if flags bit 1 is set, the stderr (fd 2) output will be redirected to stdout (fd 1) if there is a current COS primary device, otherwise it will behave the original way and log it in messages.log
+</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>flags:%Integer</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%Integer</ReturnType>
+</Method>
+
+<Method name="Install">
+<Description>
+This is deprecated. Please use the pip3 command line to install packages.
+</Description>
+<Internal>1</Internal>
+<Deprecated>1</Deprecated>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>packages:%String,dir:%String=""</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Write !
+	Write "DEPRECATED:  Please use the pip3 command line to install Python packages",!
+	Write "                 pip3 install ",$S(dir'="":"--target="_dir_" ",1:""),packages,!
+	Write !
+	Quit $$$ERROR($$$NotImplemented)
+]]></Implementation>
+</Method>
+
+<Method name="Shell">
+<Description><![CDATA[
+Starts the interactive Python shell.
+To use this method, you must have USE permission on the %Developer resource.
+To exit the shell, type the command <code>quit()</code>
+<p>If <var>vars</var> is 1, then any OREF variables present in the ObjectScript
+shell are also available in the Python shell; the reverse is not true.</p>]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>vars:%Integer=0</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim status As %Status = $$$OK
+	#dim signalstate As %Integer = ""
+	#dim stdiomode As %Integer = ""
+	#dim locals As %Integer = ""
+	Try {
+		// Must have %Developer:USE to use Shell()
+		If '$system.Security.Check($$$DevelopmentResourceName,$$$PermUseName) {
+			Set status = $$$ERROR($$$OperationRequires,$$$DevelopmentResourceName_":"_$$$PermUseName)
+			Quit
+		}
+
+		// Set command line recall context for Python.  Note when in PY mode, the command line
+		// recall will treat Ctrl-D on an empty line as a termination character (it will not if
+		// there are characters in the line).
+		Do $system.Process.NewLineRecallContext("PY")
+
+		// Enable signal/stdio processing
+		Set signalstate = ..ChangeSignalState(0)
+		Set stdiomode   = ..SetStdIOMode(3)
+
+		Set sys      = ..Import("sys")
+		Set code     = ..Import("code")
+		Set builtins = ..Import("builtins")
+		Set locals   = ..Builtins().dict()
+
+
+		// Copy top level locals objects into the python space
+		If vars {
+			Set locals = ..Builtins().dict()
+		    Set var=""
+			For {
+				Set var = $ORDER(@var)
+				Quit:var=""
+
+				If $Data(@var)#2,$IsObject(@var) {
+					Do locals."__setitem__"(var,@var)
+				}
+			}
+		}
+
+		Write !,"Python ",$REPLACE(sys.version,$C(10),$C(13,10))," on ",sys.platform,!
+		Write "Type quit() or Ctrl-D to exit this shell.",!
+
+		Set interpreter = code.InteractiveInterpreter(locals)
+		Do interpreter.runsource("import iris")
+		Set more = 0
+		Set buffer = ""
+		For {
+			Write $S(more:"...",1:">>>")," "
+			Read ln,!
+
+			// Exit on Ctrl-D on an empty line
+			Quit:$ZB=$C(4)
+
+			Set buffer = buffer _ $LB(ln)
+			Set src = $LTS(buffer,$C(10))
+			#; Use $xecute so global write requests will not be seen as
+			#; coming from a %SYS routine. If this is moved to a non-%
+			#; routine, it can be restored to the original:
+			#; Set more = interpreter.runsource(src)
+			Set more = $xecute("(int,src) quit int.runsource(src)",interpreter,src)
+			If 'more {
+				// Reset the buffer when done with multi-line statements
+				Set buffer = ""
+			}
+		}
+
+	} Catch ex {
+		// The shell might throw a SystemExit if the user calls quit(), so we ignore it
+		If ex.Data'["'SystemExit'" {
+			Set status = ex.AsStatus()
+		}
+	}
+
+	If locals'="" {
+	    do locals.clear()
+	}
+
+	// Restore previous signal state and stdio mode
+	Do:signalstate'="" ..ChangeSignalState(signalstate)
+	Do:stdiomode'="" ..SetStdIOMode(stdiomode)
+
+	// Report any errors we encountered (this is an interactive shell after all)
+	If $$$ISERR(status) {
+	    Do $system.OBJ.DisplayError()
+		Write !
+	}
+
+	Quit status
+]]></Implementation>
+</Method>
+
+<Method name="SetInteractiveMode">
+<Description>
+Set the mode of python to Interactive meaning that signal handling state swaps will be allowed.
+Interactive mode has a performance cost, but enables useful features like saving/restoring terminal state and generating better documentation.
+Returns previous signal state: 0 - swapping allowed, 1 - swapping disabled, -1 - Swapping unapplicable to your platform.
+</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>state:%Integer</FormalSpec>
+<ReturnType>%Integer</ReturnType>
+<Implementation><![CDATA[ Quit ..ChangeSignalState(state)
+]]></Implementation>
+</Method>
+
+<Method name="ToListTyped">
+<Description><![CDATA[
+Given two ObjectScript <a target="_top" href="/csp/docbook/Doc.View.cls?FIND=OBJECTSCRIPT+$LIST+FUNCTION">lists</a>,
+returns a Python list that contains the same data as <var>contentList</var>,
+with each member of the list having the data type specified in <var>typeList</var>.
+For example, the following code returns a Python list where each member of the list has the value 42,
+but is represented as ODBCTYPEbit(SQLBIT), ODBCTYPEnumeric(SQLNUMERIC), ODBCTYPEdecimal(SQLDECIMAL), and ODBCTYPEinteger(SQLINTEGER), respectively.
+More info on the type values can be found in  %occODBC.inc as well as:<br>
+<a target="_top" href="/csp/docbook/DocBook.UI.Page.cls?KEY=RSQL_datatype#RSQL_datatype_intcodes">the docs</a><br>
+<br>
+<example>
+Include %occODBC
+set clist = $lb(42, 42, 42, 42)
+set tlist = $lb(-7, 2, 3, 4)
+[or]
+set tlist = $lb($$$ODBCTYPEbit,$$$ODBCTYPEnumeric,$$$ODBCTYPEdecimal,$$$ODBCTYPEinteger)
+set plist = ##class(%SYS.Python).ToListTyped(clist, tlist)
+</example>
+<br>
+This type translation obeys Intersystems SQL Rules, so for the string and binary ODBC types,
+$C(0) will turn into Python "". For all ODBC types, $lb(,"") will be 2 Python "None" elements.
+]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>contentList:%CPP.BinList,typeList:%CPP.BinList</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%CPP.LongLong</ReturnType>
+</Method>
+
+<Method name="To2DListTyped">
+<Description><![CDATA[
+Takes in a 2D ObjectScript $LIST, and another $LIST with type info for each column in the first $LIST.<br>
+Returns a copy of the first $LIST as a python list with matching python types.<br>
+<br>
+The types are the same as for ToListTyped.<br>
+<example>
+set plist = $system.Python.To2DListTyped($lb($lb("philip",21,"electrician"),$lb("mary",22,"plumber")), $lb(12,4,12))
+</example>
+]]></Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>contentList:%Integer,typeList:%Integer</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%CPP.LongLong</ReturnType>
+</Method>
+
+<Method name="ToList">
+<Description><![CDATA[
+Given <var>contentList</var> (an ObjectScript <a target="_top" href="/csp/docbook/Doc.View.cls?FIND=OBJECTSCRIPT+$LIST+FUNCTION">list</a>),
+this method returns a Python list that contains the same data. For example:
+<example>
+ set clist = $lb(123, 456.789, "hello world")
+ set plist = ##class(%SYS.Python).ToList(clist)
+</example>
+<br>Warning:
+<br>Don't pass binary data via this API, Use ToListTyped with one of the binary ODBC types instead.
+<br>If you put binary data in this API, IRIS will try to translate it as a UTF8 string.
+]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>contentList:%CPP.BinList</FormalSpec>
+<Language>cpp</Language>
+<ReturnType>%CPP.LongLong</ReturnType>
+</Method>
+
+<Property name="ModDesc">
+<Type>%CPP.LongLong</Type>
+<Internal>1</Internal>
+<Private>1</Private>
+</Property>
+
+<Property name="UID">
+<Type>%CPP.Integer</Type>
+<Internal>1</Internal>
+<Private>1</Private>
+</Property>
+</Class>
+</Export>

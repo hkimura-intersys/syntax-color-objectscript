@@ -1,0 +1,990 @@
+{
+  "source": {
+    "aviel_reg": "aviel.reg",
+    "token_reference": "studio-classic.reg"
+  },
+  "language": {
+    "key": "Language1",
+    "language_id": 1,
+    "language_name": "ObjectScript"
+  },
+  "slot_count": 122,
+  "slots_in_order": [
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 0,
+      "meaning": "Error",
+      "token_id": "0x0400",
+      "slot": "B 0"
+    },
+    {
+      "aviel_value_hex": "80000008",
+      "channel": "foreground",
+      "index": 0,
+      "meaning": "Error",
+      "token_id": "0x0400",
+      "slot": "F 0"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 1,
+      "meaning": "White Space",
+      "token_id": "0x0401",
+      "slot": "B 1"
+    },
+    {
+      "aviel_value_hex": "80000008",
+      "channel": "foreground",
+      "index": 1,
+      "meaning": "White Space",
+      "token_id": "0x0401",
+      "slot": "F 1"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 2,
+      "meaning": "_Tab",
+      "token_id": "0x0402",
+      "slot": "B 2"
+    },
+    {
+      "aviel_value_hex": "80000008",
+      "channel": "foreground",
+      "index": 2,
+      "meaning": "_Tab",
+      "token_id": "0x0402",
+      "slot": "F 2"
+    },
+    {
+      "aviel_value_hex": "0000ffff",
+      "channel": "background",
+      "index": 3,
+      "meaning": "Label",
+      "token_id": "0x0403",
+      "slot": "B 3"
+    },
+    {
+      "aviel_value_hex": "00000080",
+      "channel": "foreground",
+      "index": 3,
+      "meaning": "Label",
+      "token_id": "0x0403",
+      "slot": "F 3"
+    },
+    {
+      "aviel_value_hex": "00c0c0c0",
+      "channel": "background",
+      "index": 4,
+      "meaning": "Dots",
+      "token_id": "0x0404",
+      "slot": "B 4"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 4,
+      "meaning": "Dots",
+      "token_id": "0x0404",
+      "slot": "F 4"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 5,
+      "meaning": "Object (Class)",
+      "token_id": "0x0405",
+      "slot": "B 5"
+    },
+    {
+      "aviel_value_hex": "00800000",
+      "channel": "foreground",
+      "index": 5,
+      "meaning": "Object (Class)",
+      "token_id": "0x0405",
+      "slot": "F 5"
+    },
+    {
+      "aviel_value_hex": "00ffc8ff",
+      "channel": "background",
+      "index": 6,
+      "meaning": "String",
+      "token_id": "0x0406",
+      "slot": "B 6"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 6,
+      "meaning": "String",
+      "token_id": "0x0406",
+      "slot": "F 6"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 7,
+      "meaning": "Comment",
+      "token_id": "0x0407",
+      "slot": "B 7"
+    },
+    {
+      "aviel_value_hex": "00008000",
+      "channel": "foreground",
+      "index": 7,
+      "meaning": "Comment",
+      "token_id": "0x0407",
+      "slot": "F 7"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 8,
+      "meaning": "Object dot operator",
+      "token_id": "0x0408",
+      "slot": "B 8"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 8,
+      "meaning": "Object dot operator",
+      "token_id": "0x0408",
+      "slot": "F 8"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 9,
+      "meaning": "SQL",
+      "token_id": "0x0409",
+      "slot": "B 9"
+    },
+    {
+      "aviel_value_hex": "00800080",
+      "channel": "foreground",
+      "index": 9,
+      "meaning": "SQL",
+      "token_id": "0x0409",
+      "slot": "F 9"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 10,
+      "meaning": "Pre-Processor Function",
+      "token_id": "0x040A",
+      "slot": "B 10"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 10,
+      "meaning": "Pre-Processor Function",
+      "token_id": "0x040A",
+      "slot": "F 10"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 11,
+      "meaning": "Pre-Processor Command",
+      "token_id": "0x040B",
+      "slot": "B 11"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 11,
+      "meaning": "Pre-Processor Command",
+      "token_id": "0x040B",
+      "slot": "F 11"
+    },
+    {
+      "aviel_value_hex": "00c0c0c0",
+      "channel": "background",
+      "index": 12,
+      "meaning": "Macro",
+      "token_id": "0x040C",
+      "slot": "B 12"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 12,
+      "meaning": "Macro",
+      "token_id": "0x040C",
+      "slot": "F 12"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 13,
+      "meaning": "Delimiter",
+      "token_id": "0x040D",
+      "slot": "B 13"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 13,
+      "meaning": "Delimiter",
+      "token_id": "0x040D",
+      "slot": "F 13"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 14,
+      "meaning": "External reference",
+      "token_id": "0x040E",
+      "slot": "B 14"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 14,
+      "meaning": "External reference",
+      "token_id": "0x040E",
+      "slot": "F 14"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 15,
+      "meaning": "Extrinsic function",
+      "token_id": "0x040F",
+      "slot": "B 15"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 15,
+      "meaning": "Extrinsic function",
+      "token_id": "0x040F",
+      "slot": "F 15"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 16,
+      "meaning": "Format specifier",
+      "token_id": "0x0410",
+      "slot": "B 16"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 16,
+      "meaning": "Format specifier",
+      "token_id": "0x0410",
+      "slot": "F 16"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 17,
+      "meaning": "Function",
+      "token_id": "0x0411",
+      "slot": "B 17"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 17,
+      "meaning": "Function",
+      "token_id": "0x0411",
+      "slot": "F 17"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 18,
+      "meaning": "Global variable",
+      "token_id": "0x0412",
+      "slot": "B 18"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 18,
+      "meaning": "Global variable",
+      "token_id": "0x0412",
+      "slot": "F 18"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 19,
+      "meaning": "Indirection",
+      "token_id": "0x0413",
+      "slot": "B 19"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 19,
+      "meaning": "Indirection",
+      "token_id": "0x0413",
+      "slot": "F 19"
+    },
+    {
+      "aviel_value_hex": "00ffffdb",
+      "channel": "background",
+      "index": 20,
+      "meaning": "Local variable",
+      "token_id": "0x0414",
+      "slot": "B 20"
+    },
+    {
+      "aviel_value_hex": "00000080",
+      "channel": "foreground",
+      "index": 20,
+      "meaning": "Local variable",
+      "token_id": "0x0414",
+      "slot": "F 20"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 21,
+      "meaning": "Mnemonic",
+      "token_id": "0x0415",
+      "slot": "B 21"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 21,
+      "meaning": "Mnemonic",
+      "token_id": "0x0415",
+      "slot": "F 21"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 22,
+      "meaning": "Name",
+      "token_id": "0x0416",
+      "slot": "B 22"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 22,
+      "meaning": "Name",
+      "token_id": "0x0416",
+      "slot": "F 22"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 23,
+      "meaning": "Number",
+      "token_id": "0x0417",
+      "slot": "B 23"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 23,
+      "meaning": "Number",
+      "token_id": "0x0417",
+      "slot": "F 23"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 24,
+      "meaning": "Operator",
+      "token_id": "0x0418",
+      "slot": "B 24"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 24,
+      "meaning": "Operator",
+      "token_id": "0x0418",
+      "slot": "F 24"
+    },
+    {
+      "aviel_value_hex": "0000ffff",
+      "channel": "background",
+      "index": 25,
+      "meaning": "Routine",
+      "token_id": "0x0419",
+      "slot": "B 25"
+    },
+    {
+      "aviel_value_hex": "00000080",
+      "channel": "foreground",
+      "index": 25,
+      "meaning": "Routine",
+      "token_id": "0x0419",
+      "slot": "F 25"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 26,
+      "meaning": "Special",
+      "token_id": "0x041A",
+      "slot": "B 26"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 26,
+      "meaning": "Special",
+      "token_id": "0x041A",
+      "slot": "F 26"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 27,
+      "meaning": "Structured variable",
+      "token_id": "0x041B",
+      "slot": "B 27"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 27,
+      "meaning": "Structured variable",
+      "token_id": "0x041B",
+      "slot": "F 27"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 28,
+      "meaning": "System variable",
+      "token_id": "0x041C",
+      "slot": "B 28"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 28,
+      "meaning": "System variable",
+      "token_id": "0x041C",
+      "slot": "F 28"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 29,
+      "meaning": "HTML",
+      "token_id": "0x041D",
+      "slot": "B 29"
+    },
+    {
+      "aviel_value_hex": "00800080",
+      "channel": "foreground",
+      "index": 29,
+      "meaning": "HTML",
+      "token_id": "0x041D",
+      "slot": "F 29"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 30,
+      "meaning": "Object property",
+      "token_id": "0x041E",
+      "slot": "B 30"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 30,
+      "meaning": "Object property",
+      "token_id": "0x041E",
+      "slot": "F 30"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 31,
+      "meaning": "Object name",
+      "token_id": "0x041F",
+      "slot": "B 31"
+    },
+    {
+      "aviel_value_hex": "00808000",
+      "channel": "foreground",
+      "index": 31,
+      "meaning": "Object name",
+      "token_id": "0x041F",
+      "slot": "F 31"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 32,
+      "meaning": "Command",
+      "token_id": "0x0420",
+      "slot": "B 32"
+    },
+    {
+      "aviel_value_hex": "000000ff",
+      "channel": "foreground",
+      "index": 32,
+      "meaning": "Command",
+      "token_id": "0x0420",
+      "slot": "F 32"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 33,
+      "meaning": "Object instance var",
+      "token_id": "0x0421",
+      "slot": "B 33"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 33,
+      "meaning": "Object instance var",
+      "token_id": "0x0421",
+      "slot": "F 33"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 34,
+      "meaning": "Object reference var",
+      "token_id": "0x0422",
+      "slot": "B 34"
+    },
+    {
+      "aviel_value_hex": "80000008",
+      "channel": "foreground",
+      "index": 34,
+      "meaning": "Object reference var",
+      "token_id": "0x0422",
+      "slot": "F 34"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 35,
+      "meaning": "Object method",
+      "token_id": "0x0423",
+      "slot": "B 35"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 35,
+      "meaning": "Object method",
+      "token_id": "0x0423",
+      "slot": "F 35"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 36,
+      "meaning": "Object attribute",
+      "token_id": "0x0424",
+      "slot": "B 36"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 36,
+      "meaning": "Object attribute",
+      "token_id": "0x0424",
+      "slot": "F 36"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 37,
+      "meaning": "Object (This)",
+      "token_id": "0x0425",
+      "slot": "B 37"
+    },
+    {
+      "aviel_value_hex": "00800000",
+      "channel": "foreground",
+      "index": 37,
+      "meaning": "Object (This)",
+      "token_id": "0x0425",
+      "slot": "F 37"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 38,
+      "meaning": "VB Form name",
+      "token_id": "0x0426",
+      "slot": "B 38"
+    },
+    {
+      "aviel_value_hex": "80000008",
+      "channel": "foreground",
+      "index": 38,
+      "meaning": "VB Form name",
+      "token_id": "0x0426",
+      "slot": "F 38"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 39,
+      "meaning": "VB Control name",
+      "token_id": "0x0427",
+      "slot": "B 39"
+    },
+    {
+      "aviel_value_hex": "80000008",
+      "channel": "foreground",
+      "index": 39,
+      "meaning": "VB Control name",
+      "token_id": "0x0427",
+      "slot": "F 39"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 40,
+      "meaning": "VB Property name",
+      "token_id": "0x0428",
+      "slot": "B 40"
+    },
+    {
+      "aviel_value_hex": "80000008",
+      "channel": "foreground",
+      "index": 40,
+      "meaning": "VB Property name",
+      "token_id": "0x0428",
+      "slot": "F 40"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 41,
+      "meaning": "Pattern",
+      "token_id": "0x0429",
+      "slot": "B 41"
+    },
+    {
+      "aviel_value_hex": "00008080",
+      "channel": "foreground",
+      "index": 41,
+      "meaning": "Pattern",
+      "token_id": "0x0429",
+      "slot": "F 41"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 42,
+      "meaning": "Brace",
+      "token_id": "0x042A",
+      "slot": "B 42"
+    },
+    {
+      "aviel_value_hex": "00800080",
+      "channel": "foreground",
+      "index": 42,
+      "meaning": "Brace",
+      "token_id": "0x042A",
+      "slot": "F 42"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 43,
+      "meaning": "Javascript",
+      "token_id": "0x042B",
+      "slot": "B 43"
+    },
+    {
+      "aviel_value_hex": "00800080",
+      "channel": "foreground",
+      "index": 43,
+      "meaning": "Javascript",
+      "token_id": "0x042B",
+      "slot": "F 43"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 44,
+      "meaning": "CSP Extension",
+      "token_id": "0x042C",
+      "slot": "B 44"
+    },
+    {
+      "aviel_value_hex": "00800080",
+      "channel": "foreground",
+      "index": 44,
+      "meaning": "CSP Extension",
+      "token_id": "0x042C",
+      "slot": "F 44"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 45,
+      "meaning": "Object (Super)",
+      "token_id": "0x042D",
+      "slot": "B 45"
+    },
+    {
+      "aviel_value_hex": "00800000",
+      "channel": "foreground",
+      "index": 45,
+      "meaning": "Object (Super)",
+      "token_id": "0x042D",
+      "slot": "F 45"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 46,
+      "meaning": "Local variable (private)",
+      "token_id": "0x042E",
+      "slot": "B 46"
+    },
+    {
+      "aviel_value_hex": "00008080",
+      "channel": "foreground",
+      "index": 46,
+      "meaning": "Local variable (private)",
+      "token_id": "0x042E",
+      "slot": "F 46"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 47,
+      "meaning": "Option Track Warning",
+      "token_id": "0x042F",
+      "slot": "B 47"
+    },
+    {
+      "aviel_value_hex": "00800080",
+      "channel": "foreground",
+      "index": 47,
+      "meaning": "Option Track Warning",
+      "token_id": "0x042F",
+      "slot": "F 47"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 48,
+      "meaning": "Parameter",
+      "token_id": "0x0430",
+      "slot": "B 48"
+    },
+    {
+      "aviel_value_hex": "00ff00ff",
+      "channel": "foreground",
+      "index": 48,
+      "meaning": "Parameter",
+      "token_id": "0x0430",
+      "slot": "F 48"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 49,
+      "meaning": "Local (undeclared)",
+      "token_id": "0x0431",
+      "slot": "B 49"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 49,
+      "meaning": "Local (undeclared)",
+      "token_id": "0x0431",
+      "slot": "F 49"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 50,
+      "meaning": "Neutral",
+      "token_id": "0x0432",
+      "slot": "B 50"
+    },
+    {
+      "aviel_value_hex": "00008080",
+      "channel": "foreground",
+      "index": 50,
+      "meaning": "Neutral",
+      "token_id": "0x0432",
+      "slot": "F 50"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 51,
+      "meaning": "Documentation comment",
+      "token_id": "0x0433",
+      "slot": "B 51"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 51,
+      "meaning": "Documentation comment",
+      "token_id": "0x0433",
+      "slot": "F 51"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 52,
+      "meaning": "Unknown Z-command",
+      "token_id": "0x0434",
+      "slot": "B 52"
+    },
+    {
+      "aviel_value_hex": "00008080",
+      "channel": "foreground",
+      "index": 52,
+      "meaning": "Unknown Z-command",
+      "token_id": "0x0434",
+      "slot": "F 52"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 53,
+      "meaning": "Unknown Z-function",
+      "token_id": "0x0435",
+      "slot": "B 53"
+    },
+    {
+      "aviel_value_hex": "00008080",
+      "channel": "foreground",
+      "index": 53,
+      "meaning": "Unknown Z-function",
+      "token_id": "0x0435",
+      "slot": "F 53"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 54,
+      "meaning": "Unknown Z-variable",
+      "token_id": "0x0436",
+      "slot": "B 54"
+    },
+    {
+      "aviel_value_hex": "00008080",
+      "channel": "foreground",
+      "index": 54,
+      "meaning": "Unknown Z-variable",
+      "token_id": "0x0436",
+      "slot": "F 54"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 55,
+      "meaning": "Object member",
+      "token_id": "0x0437",
+      "slot": "B 55"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 55,
+      "meaning": "Object member",
+      "token_id": "0x0437",
+      "slot": "F 55"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 56,
+      "meaning": "JSON bracket",
+      "token_id": "0x0438",
+      "slot": "B 56"
+    },
+    {
+      "aviel_value_hex": "00ff00ff",
+      "channel": "foreground",
+      "index": 56,
+      "meaning": "JSON bracket",
+      "token_id": "0x0438",
+      "slot": "F 56"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 57,
+      "meaning": "JSON delimeter",
+      "token_id": "0x0439",
+      "slot": "B 57"
+    },
+    {
+      "aviel_value_hex": "00808080",
+      "channel": "foreground",
+      "index": 57,
+      "meaning": "JSON delimeter",
+      "token_id": "0x0439",
+      "slot": "F 57"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 58,
+      "meaning": "JSON keyword",
+      "token_id": "0x043A",
+      "slot": "B 58"
+    },
+    {
+      "aviel_value_hex": "00ff0000",
+      "channel": "foreground",
+      "index": 58,
+      "meaning": "JSON keyword",
+      "token_id": "0x043A",
+      "slot": "F 58"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 59,
+      "meaning": "Embedding open",
+      "token_id": "0x043B",
+      "slot": "B 59"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 59,
+      "meaning": "Embedding open",
+      "token_id": "0x043B",
+      "slot": "F 59"
+    },
+    {
+      "aviel_value_hex": "80000005",
+      "channel": "background",
+      "index": 60,
+      "meaning": "Embedding close",
+      "token_id": "0x043C",
+      "slot": "B 60"
+    },
+    {
+      "aviel_value_hex": "00000000",
+      "channel": "foreground",
+      "index": 60,
+      "meaning": "Embedding close",
+      "token_id": "0x043C",
+      "slot": "F 60"
+    }
+  ]
+}

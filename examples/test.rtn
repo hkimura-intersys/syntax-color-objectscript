@@ -1,0 +1,11 @@
+^MAC^Save for Source Control^^~Format=IRIS.S~^UTF8
+%RO
+heyyy^MAC^^^0
+heyyy() methodimpl {
+    w "hi"
+    set x = 2
+    if x {
+        w "bye"
+        q
+    }
+}

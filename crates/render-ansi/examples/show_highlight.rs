@@ -1,10 +1,12 @@
 use std::env;
 use std::error::Error;
 use std::fs;
+use std::io::{self, Write};
 
-use highlight_spans::Grammar;
-use render_ansi::{highlight_to_ansi_with_mode_and_background, ColorMode};
-use theme_engine::load_theme;
+use highlight_spans::highlight_structures::Grammar;
+use render_ansi::ansi_structures::{ColorMode, COLOR_MODE_NAMES};
+use render_ansi::common::{highlight_to_ansi, osc_set_default_colors};
+use theme_engine::common::load_theme;
 
 /// Parses a grammar argument and returns a human-friendly error on failure.
 fn parse_grammar(input: &str) -> Result<Grammar, String> {
@@ -49,7 +51,7 @@ fn parse_color_mode(input: &str) -> Result<ColorMode, String> {
         format!(
             "unknown color mode '{}'; use one of: {}",
             input,
-            ColorMode::supported_names().join(", ")
+            COLOR_MODE_NAMES.join(", ")
         )
     })
 }
@@ -71,7 +73,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let theme_name = args.get(2).map(String::as_str).unwrap_or("tokyonight-dark");
     let grammar_name = args.get(3).map(String::as_str).unwrap_or("objectscript");
     let mut color_mode = ColorMode::TrueColor;
-    let mut preserve_terminal_background = true;
+    let mut preserve_terminal_background = false;
 
     let mut i = 4usize;
     while i < args.len() {
@@ -100,13 +102,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     let grammar = parse_grammar(grammar_name).map_err(|msg| format!("invalid grammar: {msg}"))?;
     let source = fs::read(source_path)?;
     let theme = load_theme(theme_name)?;
+    let sequence = osc_set_default_colors(theme.clone());
+    print!("{sequence}");
+    io::stdout().flush()?;
 
-    let rendered = highlight_to_ansi_with_mode_and_background(
+    let rendered = highlight_to_ansi(
         &source,
         grammar,
         &theme,
-        color_mode,
-        preserve_terminal_background,
+        None,
+        Some(color_mode),
+        Some(preserve_terminal_background),
     )?;
     println!("{rendered}");
 

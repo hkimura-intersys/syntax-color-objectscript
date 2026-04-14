@@ -1,11 +1,10 @@
+use highlight_spans::highlight_structures::{Grammar, SpanHighlighter};
+use render_ansi::ansi_structures::{ColorMode, StreamLineRenderer, COLOR_MODE_NAMES};
 use std::env;
 use std::error::Error;
 use std::fs;
 use std::io::{self, Write};
-
-use highlight_spans::{Grammar, SpanHighlighter};
-use render_ansi::{ColorMode, StreamLineRenderer};
-use theme_engine::load_theme;
+use theme_engine::common::load_theme;
 
 #[derive(Debug, Clone)]
 struct Options {
@@ -34,7 +33,7 @@ fn parse_color_mode(input: &str) -> Result<ColorMode, String> {
         format!(
             "unknown color mode '{}'; use one of: {}",
             input,
-            ColorMode::supported_names().join(", ")
+            COLOR_MODE_NAMES.join(", ")
         )
     })
 }

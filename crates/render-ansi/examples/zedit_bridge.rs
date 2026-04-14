@@ -1,10 +1,10 @@
+use highlight_spans::highlight_structures::{Grammar, SpanHighlighter};
+use render_ansi::common::resolve_styled_spans;
 use std::env;
 use std::error::Error;
 use std::fs;
-
-use highlight_spans::{Grammar, SpanHighlighter};
-use render_ansi::resolve_styled_spans;
-use theme_engine::{load_theme, Rgb, Style, Theme};
+use theme_engine::common::load_theme;
+use theme_engine::theme_structures::{Rgb, Style, Theme};
 
 const FLAG_BOLD: u8 = 0b0001;
 const FLAG_ITALIC: u8 = 0b0010;
