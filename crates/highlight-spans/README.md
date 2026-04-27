@@ -10,11 +10,14 @@
   - `spans` contains byte ranges tagged by `attr_id`
 - `Grammar` variants:
   - `ObjectScript`
+  - `ObjectScriptRoutine`
   - `Sql` (using vendored `DerekStride/tree-sitter-sql` grammar/query assets)
   - `Python`
   - `Markdown` (using `tree-sitter-md` block+inline grammar/query constants)
   - `Mdx` (temporary fallback: uses SQL highlighting)
   - `Xml` (XML host highlighting with ObjectScript injection in `<Implementation>` content)
+  - `Json`
+  - `Yaml`
 
 ## Quick Example
 

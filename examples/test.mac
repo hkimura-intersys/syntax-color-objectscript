@@ -1,6 +1,18 @@
 Routine test.x [Type = mac]
-test
-/// testing
-#if 0
-#else
- w "back into global"
+procedure() methodimpl {
+    w "hi"
+    set x = 2
+    if x {
+        w "bye"
+        q
+    }
+}
+
+procedureTwo() 
+    w "in goodbye \n"
+    w "this is valid objectscript"
+
+ if x {
+    w "x exists"
+ }
+

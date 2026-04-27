@@ -13,12 +13,19 @@
   - falls back to legacy `styles` keys for compatibility
   - exposes `default_terminal_colors()` for terminal default fg/bg integration
 - Built-in themes:
-  - `tokyonight-dark`
+  - `tokyonight-night`
+  - `tokyonight-storm`
   - `tokyonight-moon`
-  - `tokyonight-light`
   - `tokyonight-day`
+  - `catppuccin-latte`
+  - `catppuccin-frappe`
+  - `catppuccin-macchiato`
+  - `catppuccin-mocha`
+  - `studio-default`
+  - `aviel`
   - `solarized-dark`
   - `solarized-light`
+  - aliases: `tokyonight-dark` -> `tokyonight-night`, `tokyonight-light` -> `tokyonight-day`, `tokyonight` -> `tokyonight-moon`, `studio-classic` -> `studio-default`, `studio-aviel`/`aviel-studio` -> `aviel`
 - Theme loading from JSON and TOML strings.
 
 ## Quick Example

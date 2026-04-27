@@ -9,3 +9,8 @@ heyyy() methodimpl {
         q
     }
 }
+.
+goodbye() 
+    w !, "in goodbye"
+    w !, "this is valid objectscript"
+

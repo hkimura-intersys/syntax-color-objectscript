@@ -26,15 +26,10 @@ The key benefit is decoupling parser logic from theme logic, so each can evolve 
 crates/
   highlight-spans/  # Tree-sitter -> spans + attr table
   theme-engine/     # capture name -> style resolution + built-in theme loader
-    themes/         # built-in JSON themes (tokyonight/solarized)
+    themes/         # embedded JSON theme assets
   render-ansi/      # styled ranges -> ANSI/VT escape output
   theme-engine-ffi/ # C ABI wrapper around theme-engine, highlight-spans, and render-ansi
-docs/
-  architecture.md
-  highlight-spans.md
-  theme-engine.md
-  render-ansi.md
-  integration.md
+examples/           # sample source inputs used during highlighting work
 ```
 
 ## Crates
@@ -43,16 +38,21 @@ docs/
 
 Purpose:
 
-- Convert source text (ObjectScript/SQL/Python/Markdown/MDX) into `(attr_id, start_byte, end_byte)` spans.
+- Convert source text (ObjectScript class/routine, SQL, Python, Markdown, MDX, XML, JSON, YAML) into `(attr_id, start_byte, end_byte)` spans.
 - Return an attribute table mapping `attr_id -> capture_name`.
 - Treat `mdx` as a temporary alias to SQL highlighting (for InterSystems MDX content).
+- Highlight XML host documents with ObjectScript injection inside `<Implementation>` content.
 - [Crate README](crates/highlight-spans/README.md)
 
 Depends on:
 
-- `tree-sitter-objectscript-playground = "1.6.3"`
+- `tree-sitter-objectscript-playground = "1.7.13"`
+- `tree-sitter-objectscript-routine = "1.7.13"`
 - `tree-sitter-python = "0.25.0"`
 - `tree-sitter-md = "0.5.3"`
+- `tree-sitter-json = "0.24.8"`
+- `tree-sitter-yaml = "0.7.2"`
+- `tree-sitter-xml = "0.7.0"`
 - `tree-sitter-highlight = ">=0.26.6"`
 - `tree-sitter = ">=0.26.6"`
 - bundled SQL grammar from `DerekStride/tree-sitter-sql` (`vendor/tree-sitter-sql/src/*`, `vendor/tree-sitter-sql/queries/highlights.scm`)
@@ -68,7 +68,11 @@ Purpose:
 - Provide theme default terminal fg/bg for OSC 10/11 integration.
 - Normalize capture keys (`@comment` and `comment` both resolve).
 - Support fallback (`comment.documentation -> comment -> normal`).
-- Include built-in themes: `tokyonight-dark`, `tokyonight-moon`, `tokyonight-light`, `tokyonight-day`, `solarized-dark`, `solarized-light`.
+- Include built-in themes:
+  - Tokyo Night: `tokyonight-night`, `tokyonight-storm`, `tokyonight-moon`, `tokyonight-day`
+  - Catppuccin: `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `catppuccin-mocha`
+  - Studio: `studio-default`, `aviel`
+  - Solarized: `solarized-dark`, `solarized-light`
 - [Crate README](crates/theme-engine/README.md)
 
 ### `render-ansi`
@@ -132,18 +136,13 @@ for span in &result.spans {
 
 ## Documentation
 
-- [arc42 Architecture](docs/arc42.md)
-- [C4 Model](docs/c4.md)
-- [Design Doc](docs/design-doc.md)
-- [Integration Steps](docs/integration.md)
-- [Incremental Terminal Highlighting Guide](docs/incremental-terminal-highlighting.md)
-- [Release and Publish Guide](docs/release.md)
-- [Usage Examples](docs/usage-examples.md)
-- [Data Structure: HighlightResult](docs/data-structures/highlight-result.md)
-- [Data Structure: Theme](docs/data-structures/theme.md)
-- [Data Structure: StyledSpan](docs/data-structures/styled-span.md)
-- [Code Health Report](docs/code-health-report.md)
-- [Edge-Case Test Plan](test-plan.md)
+Primary documentation currently lives in the crate READMEs:
+
+- [highlight-spans](crates/highlight-spans/README.md)
+- [theme-engine](crates/theme-engine/README.md)
+- [render-ansi](crates/render-ansi/README.md)
+- [theme-engine-ffi](crates/theme-engine-ffi/README.md)
+- [examples/](examples/)
 
 ## Test
 

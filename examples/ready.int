@@ -1,0 +1,11 @@
+IRIS for Windows^INT^^~Format=IRIS.S~^RAW
+%RO on 24 Mar 2026  11:08 AM
+User.Test.1^INT^1^67653,39931.2238461^0^1
+ ;User.Test.1
+ ;Generated for class User.Test.  Do NOT edit. 03/24/2026 11:05:31AM
+ ;;616D684F;User.Test
+ ;
+Ready 
+ set x = 2
+ write "easy function"
+ quit

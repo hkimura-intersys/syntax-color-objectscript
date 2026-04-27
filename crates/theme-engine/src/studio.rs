@@ -162,7 +162,7 @@ pub fn build_studio_theme(variant: StudioVariant) -> Theme {
         &[
             "keyword.debug",
             "punctuation.special",
-            " variable.member",
+            "variable.member",
             "number",
         ],
         normal_style,

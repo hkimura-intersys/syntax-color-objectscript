@@ -1,0 +1,21 @@
+ROUTINE %READY
+refactor
+    If 1 {
+       d refactorSubroutine1
+       set x = 1
+    }
+    w !, "x=", x
+    w !, "y=", y
+
+
+refactorSubroutine
+    new y
+    set y = 1
+    quit
+
+
+refactorSubroutine1
+    set x = 2
+    set y = 250 d refactorSubroutine
+    quit
+
