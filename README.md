@@ -46,8 +46,8 @@ Purpose:
 
 Depends on:
 
-- `tree-sitter-objectscript-playground = "1.7.13"`
-- `tree-sitter-objectscript-routine = "1.7.13"`
+- `tree-sitter-objectscript-playground = "1.9.4"`
+- `tree-sitter-objectscript-routine = "1.9.4"`
 - `tree-sitter-python = "0.25.0"`
 - `tree-sitter-md = "0.5.3"`
 - `tree-sitter-json = "0.24.8"`

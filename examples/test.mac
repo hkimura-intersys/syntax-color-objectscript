@@ -15,4 +15,3 @@ procedureTwo()
  if x {
     w "x exists"
  }
-

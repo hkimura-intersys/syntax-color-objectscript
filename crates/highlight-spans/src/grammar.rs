@@ -22,6 +22,13 @@ impl Grammar {
             "xml" => Some(Self::Xml),
             "json" => Some(Self::Json),
             "yaml" | "yml" => Some(Self::Yaml),
+            "css" => Some(Self::Css),
+            "html" => Some(Self::Html),
+            "javascript" | "js" => Some(Self::JavaScript),
+            "jsdoc" => Some(Self::JsDoc),
+            "objectscript_udl" | "objectscript-udl" | "udl" => Some(Self::ObjectScriptUdl),
+            "regex" => Some(Self::Regex),
+            "toml" => Some(Self::Toml),
             _ => None,
         }
     }
@@ -39,6 +46,13 @@ impl Grammar {
             Self::Xml => "xml",
             Self::Json => "json",
             Self::Yaml => "yaml",
+            Self::Css => "css",
+            Self::Html => "html",
+            Self::JavaScript => "javascript",
+            Self::JsDoc => "jsdoc",
+            Self::ObjectScriptUdl => "objectscript_udl",
+            Self::Regex => "regex",
+            Self::Toml => "toml",
         }
     }
 

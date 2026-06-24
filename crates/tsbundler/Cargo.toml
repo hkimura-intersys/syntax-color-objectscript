@@ -1,14 +1,15 @@
 [package]
-name = "render-ansi"
+name = "tsbundler"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "ANSI/VT rendering adapter for highlight-spans and theme-engine output"
-readme = "README.md"
+
+[lib]
+name = "recall_syntax_color_shim"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+libc = "0.2"
 highlight-spans = { version = "0.8.0", path = "../highlight-spans" }
 theme-engine = { version = "0.8.0", path = "../theme-engine" }
-thiserror = "1"
-unicode-segmentation = "1.12"
-unicode-width = "0.1"
+render-ansi  = { version = "0.8.0", path = "../render-ansi" }

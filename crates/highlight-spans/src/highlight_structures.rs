@@ -19,6 +19,7 @@ pub struct SpanHighlighter {
     pub(crate) configs: HashMap<Grammar, HighlightConfig>,
     pub(crate) attrs: Vec<Attr>,
     pub(crate) attr_ids_by_name: HashMap<String, usize>,
+    pub(crate) timing_logs_enabled: bool,
 }
 
 pub(crate) struct HighlightConfig {
@@ -40,6 +41,13 @@ pub enum Grammar {
     Xml,
     Json,
     Yaml,
+    Css,
+    Html,
+    JavaScript,
+    JsDoc,
+    ObjectScriptUdl,
+    Regex,
+    Toml,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -120,7 +128,8 @@ pub const SQL_LANGUAGE: tree_sitter_language::LanguageFn =
 pub const SQL_HIGHLIGHTS_QUERY: &str =
     include_str!("../vendor/tree-sitter-sql/queries/highlights.scm");
 
-pub const SUPPORTED_GRAMMARS: [&str; 9] = [
+
+pub const SUPPORTED_GRAMMARS: [&str; 16] = [
     "objectscript",
     "objectscript_routine",
     "sql",
@@ -130,6 +139,13 @@ pub const SUPPORTED_GRAMMARS: [&str; 9] = [
     "xml",
     "json",
     "yaml",
+    "css",
+    "html",
+    "javascript",
+    "jsdoc",
+    "objectscript_udl",
+    "regex",
+    "toml",
 ];
 
 #[derive(Debug)]

@@ -41,3 +41,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Typical Next Step
 
 Use `theme-engine` to resolve `capture_name` into styles, then pass styled ranges to a renderer (for example `render-ansi`).
+
+## Timing Logs
+
+Highlight timing logs are off by default. You can enable them either per highlighter:
+
+```rust
+let mut highlighter = SpanHighlighter::new()?.with_timing_logs_enabled(true);
+```
+
+or process-wide for newly created highlighters:
+
+```bash
+SYNTAX_COLOR_LOG_HIGHLIGHT_TIMINGS=1 cargo run ...
+```
+
+When enabled, `highlight-spans` writes one stderr line per highlight call with the grammar, source size, span count, and a small timing breakdown for the base pass and injection work.

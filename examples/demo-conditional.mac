@@ -1,22 +1,4 @@
 ROUTINE conditionals
 
 hasStaleCode
-    set x = 2
-    if 1
-    write !, "goodbye world"
-    else
-    write !, "hello world"
-
-refactorToBlocks
-    set y = 2
-    if y = 2 set x = 3 
-    else  set x = 1 
-    
-staleOrArgumentless
-    if  set x = 2 w "hey"
-
-elseRefactoring
-    w "else edge case"
-    else  w "bye"
-
-
+    set i=1 for {set i = i + 1 QUIT:i=7  set x = 3}

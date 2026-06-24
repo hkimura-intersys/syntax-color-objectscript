@@ -1,2 +1,6 @@
 /target/
 Cargo.lock
+
+examples/dotted_statements_extreme.mac
+.vscode/
+tools/tsview

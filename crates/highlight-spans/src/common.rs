@@ -168,4 +168,3 @@ pub fn normalize_spans(mut spans: Vec<Span>) -> Vec<Span> {
     }
     out
 }
-

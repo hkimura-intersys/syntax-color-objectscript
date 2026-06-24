@@ -2,9 +2,11 @@ use crate::common::*;
 use crate::highlight_structures::*;
 use std::cmp::Reverse;
 use std::collections::HashMap;
+use std::env;
+use std::time::{Duration, Instant};
 use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
 
-const ALL_GRAMMARS: [Grammar; 9] = [
+const ALL_GRAMMARS: [Grammar; 16] = [
     Grammar::ObjectScript,
     Grammar::ObjectScriptRoutine,
     Grammar::Sql,
@@ -14,7 +16,24 @@ const ALL_GRAMMARS: [Grammar; 9] = [
     Grammar::Xml,
     Grammar::Json,
     Grammar::Yaml,
+    Grammar::Css,
+    Grammar::Html,
+    Grammar::JavaScript,
+    Grammar::JsDoc,
+    Grammar::ObjectScriptUdl,
+    Grammar::Regex,
+    Grammar::Toml,
 ];
+
+const HIGHLIGHT_TIMING_ENV_VAR: &str = "SYNTAX_COLOR_LOG_HIGHLIGHT_TIMINGS";
+
+#[derive(Clone, Copy, Default)]
+struct HighlightTimingBreakdown {
+    base: Duration,
+    injection_query: Duration,
+    injection_apply: Duration,
+    injection_count: usize,
+}
 
 struct GrammarSource {
     language: Language,
@@ -70,6 +89,41 @@ fn grammar_source(grammar: Grammar) -> GrammarSource {
             highlights_query: YAML_HIGHLIGHTS_QUERY,
             injections_query: "",
         },
+        Grammar::Css => GrammarSource {
+            language: tree_sitter_css::LANGUAGE.into(),
+            highlights_query: tree_sitter_css::HIGHLIGHTS_QUERY,
+            injections_query: "",
+        },
+        Grammar::Html => GrammarSource {
+            language: tree_sitter_html::LANGUAGE.into(),
+            highlights_query: tree_sitter_html::HIGHLIGHTS_QUERY,
+            injections_query: tree_sitter_html::INJECTIONS_QUERY,
+        },
+        Grammar::JavaScript => GrammarSource {
+            language: tree_sitter_javascript::LANGUAGE.into(),
+            highlights_query: tree_sitter_javascript::HIGHLIGHT_QUERY,
+            injections_query: tree_sitter_javascript::INJECTIONS_QUERY,
+        },
+        Grammar::JsDoc => GrammarSource {
+            language: tree_sitter_jsdoc::LANGUAGE.into(),
+            highlights_query: tree_sitter_jsdoc::HIGHLIGHTS_QUERY,
+            injections_query: "",
+        },
+        Grammar::ObjectScriptUdl => GrammarSource {
+            language: tree_sitter_objectscript::LANGUAGE_OBJECTSCRIPT_UDL.into(),
+            highlights_query: tree_sitter_objectscript::STUDIO_HIGHLIGHTS_QUERY,
+            injections_query: tree_sitter_objectscript::INJECTIONS_QUERY,
+        },
+        Grammar::Regex => GrammarSource {
+            language: tree_sitter_regex::LANGUAGE.into(),
+            highlights_query: tree_sitter_regex::HIGHLIGHTS_QUERY,
+            injections_query: "",
+        },
+        Grammar::Toml => GrammarSource {
+            language: tree_sitter_toml_ng::LANGUAGE.into(),
+            highlights_query: tree_sitter_toml_ng::HIGHLIGHTS_QUERY,
+            injections_query: "",
+        },
     }
 }
 
@@ -95,6 +149,61 @@ fn register_capture_names(
         attr_ids_by_name.insert(owned.clone(), id);
         recognized.push(owned);
     }
+}
+
+fn env_flag_enabled(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
+fn highlight_timing_logs_enabled_from_env() -> bool {
+    match env::var(HIGHLIGHT_TIMING_ENV_VAR) {
+        Ok(value) => env_flag_enabled(&value),
+        Err(_) => false,
+    }
+}
+
+fn format_duration(duration: Duration) -> String {
+    format!("{:.1}ms", duration.as_secs_f64() * 1000.0)
+}
+
+fn log_highlight_success(
+    grammar: Grammar,
+    source_len: usize,
+    span_count: usize,
+    total: Duration,
+    timing: HighlightTimingBreakdown,
+) {
+    eprintln!(
+        "[syntax-color][highlight] {} {}B -> {} span(s) in {} (base {}, injection query {}, injection apply {}, injections {})",
+        grammar.canonical_name(),
+        source_len,
+        span_count,
+        format_duration(total),
+        format_duration(timing.base),
+        format_duration(timing.injection_query),
+        format_duration(timing.injection_apply),
+        timing.injection_count,
+    );
+}
+
+fn log_highlight_failure(
+    grammar: Grammar,
+    source_len: usize,
+    total: Duration,
+    phase: &'static str,
+    error: &HighlightError,
+) {
+    eprintln!(
+        "[syntax-color][highlight] {} {}B failed during {} after {}: {}",
+        grammar.canonical_name(),
+        source_len,
+        phase,
+        format_duration(total),
+        error,
+    );
 }
 
 fn build_highlight_config(grammar: Grammar) -> Result<HighlightConfig, HighlightError> {
@@ -140,7 +249,11 @@ impl SpanHighlighter {
 
         for grammar in ALL_GRAMMARS {
             let config = build_highlight_config(grammar)?;
-            register_capture_names(&config.highlight_query, &mut attr_ids_by_name, &mut recognized);
+            register_capture_names(
+                &config.highlight_query,
+                &mut attr_ids_by_name,
+                &mut recognized,
+            );
             configs.insert(grammar, config);
         }
 
@@ -154,7 +267,26 @@ impl SpanHighlighter {
             configs,
             attrs,
             attr_ids_by_name,
+            timing_logs_enabled: highlight_timing_logs_enabled_from_env(),
         })
+    }
+
+    /// Returns whether this highlighter emits per-highlight timing logs.
+    #[must_use]
+    pub fn timing_logs_enabled(&self) -> bool {
+        self.timing_logs_enabled
+    }
+
+    /// Enables or disables per-highlight timing logs written to stderr.
+    pub fn set_timing_logs_enabled(&mut self, enabled: bool) {
+        self.timing_logs_enabled = enabled;
+    }
+
+    /// Returns a copy of this highlighter with timing logs enabled or disabled.
+    #[must_use]
+    pub fn with_timing_logs_enabled(mut self, enabled: bool) -> Self {
+        self.set_timing_logs_enabled(enabled);
+        self
     }
 
     /// Highlights a source buffer and returns capture attributes plus byte spans.
@@ -173,11 +305,80 @@ impl SpanHighlighter {
         source: &[u8],
         grammar: Grammar,
     ) -> Result<HighlightResult, HighlightError> {
+        if self.timing_logs_enabled {
+            return self.highlight_with_timing(source, grammar);
+        }
+
+        self.highlight_internal(source, grammar)
+    }
+
+    fn highlight_internal(
+        &mut self,
+        source: &[u8],
+        grammar: Grammar,
+    ) -> Result<HighlightResult, HighlightError> {
         let mut result = self.highlight_base(source, grammar)?;
         if builds_manual_injections(grammar) {
             let injections = self.find_injections(source, grammar)?;
             self.apply_injections(source, &mut result, injections)?;
         }
+        Ok(result)
+    }
+
+    fn highlight_with_timing(
+        &mut self,
+        source: &[u8],
+        grammar: Grammar,
+    ) -> Result<HighlightResult, HighlightError> {
+        let started_at = Instant::now();
+        let mut timing = HighlightTimingBreakdown::default();
+
+        let base_started_at = Instant::now();
+        let mut result = match self.highlight_base(source, grammar) {
+            Ok(result) => result,
+            Err(error) => {
+                log_highlight_failure(grammar, source.len(), started_at.elapsed(), "base", &error);
+                return Err(error);
+            }
+        };
+        timing.base = base_started_at.elapsed();
+
+        if builds_manual_injections(grammar) {
+            let injection_query_started_at = Instant::now();
+            let injections = match self.find_injections(source, grammar) {
+                Ok(injections) => injections,
+                Err(error) => {
+                    log_highlight_failure(
+                        grammar,
+                        source.len(),
+                        started_at.elapsed(),
+                        "injection query",
+                        &error,
+                    );
+                    return Err(error);
+                }
+            };
+            timing.injection_query = injection_query_started_at.elapsed();
+            timing.injection_count = injections.len();
+
+            if !injections.is_empty() {
+                let injection_apply_started_at = Instant::now();
+                if let Err(error) = self.apply_injections(source, &mut result, injections) {
+                    log_highlight_failure(
+                        grammar,
+                        source.len(),
+                        started_at.elapsed(),
+                        "injection apply",
+                        &error,
+                    );
+                    return Err(error);
+                }
+                timing.injection_apply = injection_apply_started_at.elapsed();
+            }
+        }
+
+        let total = started_at.elapsed();
+        log_highlight_success(grammar, source.len(), result.spans.len(), total, timing);
         Ok(result)
     }
 
@@ -288,7 +489,10 @@ impl SpanHighlighter {
             return Ok(Vec::new());
         };
 
-        let tree = config.parser.parse(source, None).ok_or(HighlightError::Parse)?;
+        let tree = config
+            .parser
+            .parse(source, None)
+            .ok_or(HighlightError::Parse)?;
         let mut cursor = QueryCursor::new();
         let mut injections = Vec::new();
         let mut matches = cursor.matches(query, tree.root_node(), source);
@@ -395,7 +599,10 @@ impl SpanHighlighter {
     ) -> Result<Vec<Span>, HighlightError> {
         let query = &config.highlight_query;
         let capture_names = query.capture_names();
-        let tree = config.parser.parse(source, None).ok_or(HighlightError::Parse)?;
+        let tree = config
+            .parser
+            .parse(source, None)
+            .ok_or(HighlightError::Parse)?;
 
         let mut candidates = Vec::<CaptureCandidate>::new();
         let mut order = 0usize;
@@ -485,5 +692,27 @@ impl SpanHighlighter {
         }
 
         Ok(normalize_spans(spans))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::env_flag_enabled;
+
+    #[test]
+    fn parses_truthy_timing_log_values() {
+        assert!(env_flag_enabled("1"));
+        assert!(env_flag_enabled("true"));
+        assert!(env_flag_enabled(" TRUE "));
+        assert!(env_flag_enabled("yes"));
+        assert!(env_flag_enabled("on"));
+    }
+
+    #[test]
+    fn rejects_falsey_timing_log_values() {
+        assert!(!env_flag_enabled("0"));
+        assert!(!env_flag_enabled("false"));
+        assert!(!env_flag_enabled("off"));
+        assert!(!env_flag_enabled(""));
     }
 }
