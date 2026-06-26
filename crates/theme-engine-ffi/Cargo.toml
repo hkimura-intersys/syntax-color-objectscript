@@ -9,6 +9,6 @@ description = "C FFI bindings for theme-engine, highlight-spans, and render-ansi
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-theme-engine = { version = "0.8.0", path = "../theme-engine" }
-highlight-spans = { version = "0.8.0", path = "../highlight-spans" }
-render-ansi = { version = "0.8.0", path = "../render-ansi" }
+theme-engine = { version = "0.9.0", path = "../theme-engine" }
+highlight-spans = { version = "0.9.0", path = "../highlight-spans" }
+render-ansi = { version = "0.9.0", path = "../render-ansi" }
