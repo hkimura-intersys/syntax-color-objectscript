@@ -648,6 +648,48 @@ pub unsafe extern "C" fn tsbundler_theme_activate(
     count
 }
 
+/// Resolve a UI role from the active theme.
+///
+/// `role_name` is one of the canonical UI role names: "default_fg", "default_bg",
+/// "statusline", "statusline_inactive", "tab_active", "tab_inactive", "selection",
+/// "cursorline".
+///
+/// On success, writes fg, bg, attrs into the out-pointers and returns TSBUNDLER_OK.
+/// Returns negative error code if the role is not found or no theme is active.
+#[no_mangle]
+pub unsafe extern "C" fn tsbundler_theme_resolve_ui(
+    ctx: *mut tsbundler_ctx_s,
+    role_name: *const c_char,
+    out_fg: *mut ZeditRgb,
+    out_bg: *mut ZeditRgb,
+    out_attrs: *mut ZeditVduAttr,
+) -> c_int {
+    let Some(ctx) = ctx.as_ref() else {
+        return -(TsbundlerError::ErrInternal as i32);
+    };
+    let Ok(name_str) = CStr::from_ptr(role_name).to_str() else {
+        return -(TsbundlerError::ErrInternal as i32);
+    };
+    let Some(idx) = ctx.active_theme else {
+        return -(TsbundlerError::ErrNoTheme as i32);
+    };
+    let theme = &ctx.themes[idx];
+    let Some(style) = theme.engine_theme.resolve_ui(name_str) else {
+        return -(TsbundlerError::ErrNoTheme as i32);
+    };
+
+    if !out_fg.is_null() {
+        *out_fg = style.fg.map(rgb_to_packed).unwrap_or(ZEDIT_RGBNONE);
+    }
+    if !out_bg.is_null() {
+        *out_bg = style.bg.map(rgb_to_packed).unwrap_or(ZEDIT_RGBNONE);
+    }
+    if !out_attrs.is_null() {
+        *out_attrs = style_to_vdu_attr(&style);
+    }
+    TsbundlerError::Ok as c_int
+}
+
 // =============================================================================
 // C API — document (§8)
 // =============================================================================
