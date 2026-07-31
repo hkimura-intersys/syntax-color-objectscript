@@ -45,12 +45,12 @@ fn grammar_source(grammar: Grammar) -> GrammarSource {
     match grammar {
         Grammar::ObjectScript => GrammarSource {
             language: tree_sitter_objectscript_playground::LANGUAGE_OBJECTSCRIPT.into(),
-            highlights_query: tree_sitter_objectscript_playground::STUDIO_HIGHLIGHTS_QUERY,
+            highlights_query: tree_sitter_objectscript_playground::HIGHLIGHTS_QUERY,
             injections_query: tree_sitter_objectscript_playground::INJECTIONS_QUERY,
         },
         Grammar::ObjectScriptRoutine => GrammarSource {
             language: tree_sitter_objectscript_routine::LANGUAGE_OBJECTSCRIPT_ROUTINE.into(),
-            highlights_query: tree_sitter_objectscript_routine::STUDIO_HIGHLIGHTS_QUERY,
+            highlights_query: tree_sitter_objectscript_routine::HIGHLIGHTS_QUERY,
             injections_query: tree_sitter_objectscript_routine::INJECTIONS_QUERY,
         },
         Grammar::Sql => GrammarSource {
@@ -111,7 +111,7 @@ fn grammar_source(grammar: Grammar) -> GrammarSource {
         },
         Grammar::ObjectScriptUdl => GrammarSource {
             language: tree_sitter_objectscript::LANGUAGE_OBJECTSCRIPT_UDL.into(),
-            highlights_query: tree_sitter_objectscript::STUDIO_HIGHLIGHTS_QUERY,
+            highlights_query: tree_sitter_objectscript::HIGHLIGHTS_QUERY,
             injections_query: tree_sitter_objectscript::INJECTIONS_QUERY,
         },
         Grammar::Regex => GrammarSource {
@@ -494,7 +494,7 @@ impl SpanHighlighter {
             .parse(source, None)
             .ok_or(HighlightError::Parse)?;
         let mut cursor = QueryCursor::new();
-        let mut injections = Vec::new();
+        let mut ranked: Vec<(usize, InjectionRegion)> = Vec::new();
         let mut matches = cursor.matches(query, tree.root_node(), source);
         while let Some(mat) = matches.next() {
             let Some(injection) = Self::injection_region_for_match(
@@ -506,26 +506,26 @@ impl SpanHighlighter {
             ) else {
                 continue;
             };
-            injections.push(injection);
+            ranked.push((mat.pattern_index, injection));
         }
 
-        if injections.is_empty() {
-            return Ok(injections);
+        if ranked.is_empty() {
+            return Ok(Vec::new());
         }
 
-        injections.sort_by(|a, b| {
+        ranked.sort_by(|(pi_a, a), (pi_b, b)| {
             a.start_byte
                 .cmp(&b.start_byte)
                 .then(b.end_byte.cmp(&a.end_byte))
-                .then((a.grammar as u8).cmp(&(b.grammar as u8)))
+                .then(pi_a.cmp(pi_b))
         });
-        injections.dedup_by(|a, b| {
-            a.grammar == b.grammar && a.start_byte == b.start_byte && a.end_byte == b.end_byte
+        ranked.dedup_by(|(_, a), (_, b)| {
+            a.start_byte == b.start_byte && a.end_byte == b.end_byte
         });
 
-        let mut non_overlapping = Vec::with_capacity(injections.len());
+        let mut non_overlapping = Vec::with_capacity(ranked.len());
         let mut last_end = 0usize;
-        for injection in injections {
+        for (_, injection) in ranked {
             if injection.start_byte < last_end {
                 continue;
             }

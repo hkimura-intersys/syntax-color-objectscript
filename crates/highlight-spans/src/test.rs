@@ -64,16 +64,16 @@ proc() {
             "expected highlighted span to be keyword.type for routine"
         );
         assert!(
-            has_capture_for_text(&result, source, "label", b"proc"),
-            "expected highlighted span to be label for proc"
+            has_capture_for_text(&result, source, "function.method", b"proc"),
+            "expected highlighted span to be function.method for proc"
         );
         assert!(
-            has_capture_for_text(&result, source, "punctuation.special", b"["),
-            "expected highlighted span to be punctuation.special for ["
+            has_capture_for_text(&result, source, "punctuation.delimiter", b"["),
+            "expected highlighted span to be punctuation.delimiter for ["
         );
         assert!(
-            has_capture_for_text(&result, source, "keyword.operator", b"type "),
-            "expected highlighted span to be keword.operator for type, but instead it was {:?}",
+            has_capture_for_text(&result, source, "type.builtin", b"type "),
+            "expected highlighted span to be type.builtin for type, but instead it was {:?}",
             &result
         )
     }
@@ -139,6 +139,32 @@ SELECT ID,Name FROM Employee
         assert!(
             has_capture_for_text(&result, source, "keyword", b"SELECT"),
             "expected SQL SELECT in %SQLQuery body to be highlighted as keyword"
+        );
+    }
+
+    #[test]
+    fn objectscript_yaml_xdata_is_highlighted() {
+        let source = br#"Class Test
+{
+  XData SampleAPI [mimetype = "application/yaml"]
+  {
+swagger: "2.0"
+info:
+  title: Sample API
+  }
+}"#;
+        let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
+        let result = highlighter
+            .highlight(source, Grammar::ObjectScript)
+            .expect("failed to highlight ObjectScript with YAML injection");
+
+        assert!(
+            has_capture_for_text(&result, source, "string", b"\"2.0\""),
+            "expected YAML string value to be highlighted in YAML XData injection"
+        );
+        assert!(
+            has_capture_for_text(&result, source, "property", b"swagger"),
+            "expected YAML key to be highlighted as property in YAML XData injection"
         );
     }
 
@@ -209,6 +235,31 @@ SELECT ID,Name FROM Employee
         assert!(
             has_capture_for_text(&result, source, "number", b"42"),
             "expected injected ObjectScript numeric literal to be highlighted"
+        );
+    }
+
+    #[test]
+    fn yaml_standalone_highlights_correctly() {
+        let source = b"swagger: \"2.0\"\ninfo:\n  title: Sample API\n";
+        let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
+        let result = highlighter
+            .highlight(source, Grammar::Yaml)
+            .expect("failed to highlight YAML");
+
+        eprintln!("\n--- YAML standalone spans ---");
+        for span in &result.spans {
+            let text =
+                std::str::from_utf8(&source[span.start_byte..span.end_byte]).unwrap_or("<binary>");
+            let capture_name = &result.attrs[span.attr_id].capture_name;
+            eprintln!(
+                "  [{}..{}] {:25} {:?}",
+                span.start_byte, span.end_byte, capture_name, text
+            );
+        }
+
+        assert!(
+            has_capture_for_text(&result, source, "string", b"\"2.0\""),
+            "expected YAML string"
         );
     }
 }
