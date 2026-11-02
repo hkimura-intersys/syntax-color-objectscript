@@ -262,4 +262,88 @@ info:
             "expected YAML string"
         );
     }
+
+    #[test]
+    fn diff_bare_unified_diff_debug() {
+        let source = b"--- a/foo.py\n+++ b/foo.py\n@@ -1,2 +1,2 @@\n-import os\n+import sys\n def main():\n";
+        let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
+        let result = highlighter
+            .highlight(source, Grammar::Diff)
+            .expect("failed to highlight diff");
+
+        eprintln!("\n--- bare unified diff spans ---");
+        for span in &result.spans {
+            let text =
+                std::str::from_utf8(&source[span.start_byte..span.end_byte]).unwrap_or("<binary>");
+            let capture_name = &result.attrs[span.attr_id].capture_name;
+            eprintln!(
+                "  [{}..{}] {:25} {:?}",
+                span.start_byte, span.end_byte, capture_name, text
+            );
+        }
+    }
+
+    #[test]
+    fn diff_git_style_with_python_injection() {
+        let source = b"diff --git a/foo.py b/foo.py\nindex 1234567..89abcde 100644\n--- a/foo.py\n+++ b/foo.py\n@@ -1,2 +1,2 @@\n-import os\n+import sys\n def main():\n";
+        let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
+        let result = highlighter
+            .highlight(source, Grammar::Diff)
+            .expect("failed to highlight diff");
+
+        eprintln!("\n--- git-style diff spans (expect Python injection) ---");
+        for span in &result.spans {
+            let text =
+                std::str::from_utf8(&source[span.start_byte..span.end_byte]).unwrap_or("<binary>");
+            let capture_name = &result.attrs[span.attr_id].capture_name;
+            eprintln!(
+                "  [{}..{}] {:25} {:?}",
+                span.start_byte, span.end_byte, capture_name, text
+            );
+        }
+
+        assert!(
+            has_capture_for_text(&result, source, "keyword", b"import"),
+            "expected an injected Python 'import' keyword inside a diff hunk line"
+        );
+    }
+
+    #[test]
+    fn diff_plus_marker_carries_the_line_background_even_though_punctuation_special_wins_the_byte(
+    ) {
+        let source = b"@@ -1,1 +1,1 @@\n+added line\n";
+        let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
+        let result = highlighter
+            .highlight(source, Grammar::Diff)
+            .expect("failed to highlight diff");
+
+        let diff_plus_attr_id = result
+            .attrs
+            .iter()
+            .find(|attr| attr.capture_name == "diff.plus")
+            .map(|attr| attr.id)
+            .expect("expected a diff.plus attribute");
+
+        let marker_byte = source
+            .windows(b"+added".len())
+            .position(|w| w == b"+added")
+            .expect("marker byte");
+        let marker_span = result
+            .spans
+            .iter()
+            .find(|span| span.start_byte <= marker_byte && marker_byte < span.end_byte)
+            .expect("expected a span covering the '+' marker");
+
+        assert_eq!(
+            result.attrs[marker_span.attr_id].capture_name,
+            "punctuation.special",
+            "sanity check: the marker byte should still be won by punctuation.special"
+        );
+        assert_eq!(
+            marker_span.background_attr_id,
+            Some(diff_plus_attr_id),
+            "the marker span should carry diff.plus's background even though \
+             punctuation.special won the byte outright"
+        );
+    }
 }

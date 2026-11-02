@@ -4,9 +4,9 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::env;
 use std::time::{Duration, Instant};
-use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
+use tree_sitter::{Language, Parser, Query, QueryCursor, QueryPredicateArg, StreamingIterator};
 
-const ALL_GRAMMARS: [Grammar; 16] = [
+const ALL_GRAMMARS: [Grammar; 17] = [
     Grammar::ObjectScript,
     Grammar::ObjectScriptRoutine,
     Grammar::Sql,
@@ -23,6 +23,7 @@ const ALL_GRAMMARS: [Grammar; 16] = [
     Grammar::ObjectScriptUdl,
     Grammar::Regex,
     Grammar::Toml,
+    Grammar::Diff,
 ];
 
 const HIGHLIGHT_TIMING_ENV_VAR: &str = "SYNTAX_COLOR_LOG_HIGHLIGHT_TIMINGS";
@@ -124,14 +125,71 @@ fn grammar_source(grammar: Grammar) -> GrammarSource {
             highlights_query: tree_sitter_toml_ng::HIGHLIGHTS_QUERY,
             injections_query: "",
         },
+        Grammar::Diff => GrammarSource {
+            language: DIFF_LANGUAGE.into(),
+            highlights_query: DIFF_HIGHLIGHTS_QUERY,
+            injections_query: DIFF_INJECTIONS_QUERY,
+        },
     }
 }
 
 fn builds_manual_injections(grammar: Grammar) -> bool {
     matches!(
         grammar,
-        Grammar::ObjectScript | Grammar::ObjectScriptRoutine | Grammar::Xml
+        Grammar::ObjectScript | Grammar::ObjectScriptRoutine | Grammar::Xml | Grammar::Diff
     )
+}
+
+/// Finds the attr id of a base (pre-injection) span covering byte `start`,
+/// if any -- used to carry an ambient background classification (e.g.
+/// `diff.plus`) forward into the spans that will replace it. `base_spans` is
+/// normalized (sorted, non-overlapping), so at most one span can cover any
+/// given byte; this returns that one, or `None` if `start` falls in a gap.
+fn base_attr_covering(base_spans: &[Span], start: usize) -> Option<usize> {
+    base_spans
+        .iter()
+        .find(|span| span.start_byte <= start && start < span.end_byte)
+        .map(|span| span.attr_id)
+}
+
+/// Inserts filler spans into `spans` (assumed sorted, non-overlapping, and
+/// already offset into the outer source's byte range) for any sub-range of
+/// `[region_start, region_end)` not covered by an existing span. Each filler
+/// uses `background_attr_id` as its own `attr_id` -- resolving a background
+/// classification's capture name directly (rather than some unrelated
+/// "normal"/empty placeholder) is what lets `render-ansi` merge in whatever
+/// `bg` that classification defines while still falling through to the
+/// theme's plain `normal` foreground, since capture styles are always merged
+/// over `normal` first.
+fn fill_injection_gaps(
+    spans: &mut Vec<Span>,
+    region_start: usize,
+    region_end: usize,
+    background_attr_id: usize,
+) {
+    let mut filled = Vec::with_capacity(spans.len().saturating_mul(2).saturating_add(1));
+    let mut cursor = region_start;
+    for span in spans.drain(..) {
+        if cursor < span.start_byte {
+            filled.push(Span {
+                attr_id: background_attr_id,
+                start_byte: cursor,
+                end_byte: span.start_byte,
+                background_attr_id: None,
+            });
+        }
+        cursor = cursor.max(span.end_byte);
+        filled.push(span);
+    }
+    if cursor < region_end {
+        filled.push(Span {
+            attr_id: background_attr_id,
+            start_byte: cursor,
+            end_byte: region_end,
+            background_attr_id: None,
+        });
+    }
+    *spans = filled;
 }
 
 fn register_capture_names(
@@ -217,12 +275,15 @@ fn build_highlight_config(grammar: Grammar) -> Result<HighlightConfig, Highlight
     } else {
         Some(Query::new(&source.language, source.injections_query)?)
     };
-    let (injection_content_capture_index, injection_language_capture_index) =
-        if let Some(query) = injection_query.as_ref() {
-            injection_capture_indices(query)
-        } else {
-            (None, None)
-        };
+    let (
+        injection_content_capture_index,
+        injection_language_capture_index,
+        injection_filename_capture_index,
+    ) = if let Some(query) = injection_query.as_ref() {
+        injection_capture_indices(query)
+    } else {
+        (None, None, None)
+    };
 
     Ok(HighlightConfig {
         parser,
@@ -230,6 +291,7 @@ fn build_highlight_config(grammar: Grammar) -> Result<HighlightConfig, Highlight
         injection_query,
         injection_content_capture_index,
         injection_language_capture_index,
+        injection_filename_capture_index,
     })
 }
 
@@ -445,16 +507,41 @@ impl SpanHighlighter {
             let nested_source = &source[injection.start_byte..injection.end_byte];
             let nested = self.highlight_base(nested_source, injection.grammar)?;
             let remap = remap_attr_ids(&nested.attrs, &mut attrs, &mut attr_ids_by_name);
+            // The host-grammar span this injection region sat inside is about
+            // to be excluded wholesale (see `exclude_ranges` below) -- carry
+            // its attr id forward as each injected span's background, rather
+            // than losing that classification entirely. `base.attrs`'s ids
+            // are a stable prefix of the (currently being extended) `attrs`,
+            // so this id stays valid for the final, merged attribute table.
+            let background_attr_id = base_attr_covering(&base.spans, injection.start_byte);
+            let mut region_spans = Vec::with_capacity(nested.spans.len());
             for span in nested.spans {
                 let Some(&mapped_attr_id) = remap.get(span.attr_id) else {
                     continue;
                 };
-                injected_spans.push(Span {
+                region_spans.push(Span {
                     attr_id: mapped_attr_id,
                     start_byte: span.start_byte + injection.start_byte,
                     end_byte: span.end_byte + injection.start_byte,
+                    background_attr_id,
                 });
             }
+            // The nested grammar's own query doesn't capture every byte (for
+            // example whitespace between Python tokens) -- left alone, those
+            // gaps would fall through to render-ansi's generic uncovered-range
+            // fill, which has no idea a `diff.plus` line surrounds them. Fill
+            // them explicitly using the ambient classification's own attr, so
+            // a gap renders as plain `normal` text over the ambient background
+            // rather than losing the background entirely.
+            if let Some(background_attr_id) = background_attr_id {
+                fill_injection_gaps(
+                    &mut region_spans,
+                    injection.start_byte,
+                    injection.end_byte,
+                    background_attr_id,
+                );
+            }
+            injected_spans.extend(region_spans);
         }
 
         let mut spans = exclude_ranges(
@@ -497,16 +584,16 @@ impl SpanHighlighter {
         let mut ranked: Vec<(usize, InjectionRegion)> = Vec::new();
         let mut matches = cursor.matches(query, tree.root_node(), source);
         while let Some(mat) = matches.next() {
-            let Some(injection) = Self::injection_region_for_match(
+            for injection in Self::injection_regions_for_match(
                 query,
                 config.injection_content_capture_index,
                 config.injection_language_capture_index,
+                config.injection_filename_capture_index,
                 source,
                 &mat,
-            ) else {
-                continue;
-            };
-            ranked.push((mat.pattern_index, injection));
+            ) {
+                ranked.push((mat.pattern_index, injection));
+            }
         }
 
         if ranked.is_empty() {
@@ -519,9 +606,7 @@ impl SpanHighlighter {
                 .then(b.end_byte.cmp(&a.end_byte))
                 .then(pi_a.cmp(pi_b))
         });
-        ranked.dedup_by(|(_, a), (_, b)| {
-            a.start_byte == b.start_byte && a.end_byte == b.end_byte
-        });
+        ranked.dedup_by(|(_, a), (_, b)| a.start_byte == b.start_byte && a.end_byte == b.end_byte);
 
         let mut non_overlapping = Vec::with_capacity(ranked.len());
         let mut last_end = 0usize;
@@ -535,25 +620,40 @@ impl SpanHighlighter {
         Ok(non_overlapping)
     }
 
-    /// Converts a query match to an [`InjectionRegion`] when captures are complete.
+    /// Converts a query match to zero or more [`InjectionRegion`]s.
     ///
-    /// Returns `None` when language or content captures are missing, unknown, or empty.
-    fn injection_region_for_match<'a>(
+    /// Most injection patterns (Markdown fenced code blocks, XML
+    /// `<Implementation>` bodies) capture exactly one `@injection.content`
+    /// node per match. `tree-sitter-diff`'s own injections.scm does not: a
+    /// single match's `(changes (context|addition|deletion)+ @injection.content)`
+    /// pattern captures the *same* capture name once per hunk line, all
+    /// sharing one language resolved from that match's `@injection.filename`
+    /// (or `@injection.language`, for other grammars) -- so every captured
+    /// content node in the match becomes its own region, all tagged with the
+    /// one language this match resolved.
+    ///
+    /// Returns an empty `Vec` when no language could be resolved (language/
+    /// filename capture missing, unknown, or naming an unsupported grammar).
+    fn injection_regions_for_match<'a>(
         query: &Query,
         content_capture: Option<u32>,
         language_capture: Option<u32>,
+        filename_capture: Option<u32>,
         source: &'a [u8],
         mat: &tree_sitter::QueryMatch<'a, 'a>,
-    ) -> Option<InjectionRegion> {
+    ) -> Vec<InjectionRegion> {
         let mut language_name = None;
-        let mut content_node = None;
+        let mut filename_text = None;
+        let mut content_nodes = Vec::new();
 
         for capture in mat.captures {
             let index = Some(capture.index);
             if index == language_capture {
                 language_name = capture.node.utf8_text(source).ok();
+            } else if index == filename_capture {
+                filename_text = capture.node.utf8_text(source).ok();
             } else if index == content_capture {
-                content_node = Some(capture.node);
+                content_nodes.push(capture.node);
             }
         }
 
@@ -573,19 +673,87 @@ impl SpanHighlighter {
             }
         }
 
-        let grammar = language_name.and_then(Grammar::from_name)?;
-        let content_node = content_node?;
-        let start_byte = content_node.start_byte();
-        let end_byte = content_node.end_byte();
-        if start_byte >= end_byte {
-            return None;
-        }
+        let Some(grammar) = language_name
+            .and_then(Grammar::from_name)
+            .or_else(|| filename_text.and_then(Grammar::from_filename))
+        else {
+            return Vec::new();
+        };
 
-        Some(InjectionRegion {
-            grammar,
-            start_byte,
-            end_byte,
-        })
+        content_nodes
+            .into_iter()
+            .filter_map(|node| {
+                let (start_byte, end_byte) = Self::apply_offset_predicate(
+                    query,
+                    mat.pattern_index,
+                    content_capture?,
+                    node.start_byte(),
+                    node.end_byte(),
+                );
+                if start_byte >= end_byte || end_byte > source.len() {
+                    return None;
+                }
+                Some(InjectionRegion {
+                    grammar,
+                    start_byte,
+                    end_byte,
+                })
+            })
+            .collect()
+    }
+
+    /// Applies a `(#offset! @capture start_row start_col end_row end_col)`
+    /// predicate to a captured node's byte range, if this match's pattern has
+    /// one for `capture_index`.
+    ///
+    /// Only same-row deltas (`start_row == 0 && end_row == 0`) are handled --
+    /// the only consumer today, `tree-sitter-diff`'s injections.scm, always
+    /// uses `(#offset! @injection.content 0 1 0 1)` to skip the leading
+    /// `+`/`-`/` ` diff marker byte on the same line. A nonzero row delta (or
+    /// a malformed predicate) is ignored -- the original byte range is
+    /// returned unchanged -- rather than computing a wrong position.
+    fn apply_offset_predicate(
+        query: &Query,
+        pattern_index: usize,
+        capture_index: u32,
+        start_byte: usize,
+        end_byte: usize,
+    ) -> (usize, usize) {
+        for predicate in query.general_predicates(pattern_index) {
+            if &*predicate.operator != "offset!" {
+                continue;
+            }
+            let [
+                QueryPredicateArg::Capture(cap),
+                QueryPredicateArg::String(start_row),
+                QueryPredicateArg::String(start_col),
+                QueryPredicateArg::String(end_row),
+                QueryPredicateArg::String(end_col),
+            ] = predicate.args.as_ref()
+            else {
+                continue;
+            };
+            if *cap != capture_index {
+                continue;
+            }
+            let (Ok(start_row), Ok(start_col), Ok(end_row), Ok(end_col)) = (
+                start_row.parse::<i64>(),
+                start_col.parse::<i64>(),
+                end_row.parse::<i64>(),
+                end_col.parse::<i64>(),
+            ) else {
+                continue;
+            };
+            if start_row != 0 || end_row != 0 {
+                continue;
+            }
+            let new_start = start_byte as i64 + start_col;
+            let new_end = end_byte as i64 + end_col;
+            if new_start >= 0 && new_end >= new_start {
+                return (new_start as usize, new_end as usize);
+            }
+        }
+        (start_byte, end_byte)
     }
 
     /// Highlights source using cached queries with playground-style precedence.
@@ -668,12 +836,33 @@ impl SpanHighlighter {
                         candidate.order,
                     )
                 }) {
+                    // A narrower/higher-priority capture (e.g. `punctuation.special`
+                    // on a diff `+`/`-` marker) wins the byte range outright and
+                    // would otherwise fully discard any broader, still-active
+                    // capture it sits inside (e.g. `diff.plus` on the whole
+                    // line). Carry the largest other active capture forward as
+                    // `background_attr_id`, the same mechanism `apply_injections`
+                    // uses -- see `Span::background_attr_id`'s doc comment.
+                    // `resolve_background_only_style` only ever contributes a
+                    // `bg`, so this is a no-op for every capture pair whose
+                    // enclosing classification has no background in the theme
+                    // (true of ordinary syntax themes; only diff-role captures
+                    // define one today).
+                    let background_attr_id = active
+                        .iter()
+                        .copied()
+                        .filter(|idx| *idx != best_idx)
+                        .max_by_key(|idx| candidates[*idx].end_byte - candidates[*idx].start_byte)
+                        .map(|idx| candidates[idx].attr_id)
+                        .filter(|attr_id| *attr_id != candidates[best_idx].attr_id);
+
                     push_merged(
                         &mut spans,
                         Span {
                             attr_id: candidates[best_idx].attr_id,
                             start_byte: cursor_byte,
                             end_byte: offset,
+                            background_attr_id,
                         },
                     );
                 }

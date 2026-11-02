@@ -29,6 +29,7 @@ impl Grammar {
             "objectscript_udl" | "objectscript-udl" | "udl" => Some(Self::ObjectScriptUdl),
             "regex" => Some(Self::Regex),
             "toml" => Some(Self::Toml),
+            "diff" | "patch" | "udiff" => Some(Self::Diff),
             _ => None,
         }
     }
@@ -53,6 +54,7 @@ impl Grammar {
             Self::ObjectScriptUdl => "objectscript_udl",
             Self::Regex => "regex",
             Self::Toml => "toml",
+            Self::Diff => "diff",
         }
     }
 
@@ -60,5 +62,24 @@ impl Grammar {
     #[must_use]
     pub fn supported_names() -> &'static [&'static str] {
         &SUPPORTED_GRAMMARS
+    }
+
+    /// Derives a [`Grammar`] from a file path's extension (for example
+    /// `"src/foo.py"` -> `Some(Self::Python)`), for resolving diff hunk
+    /// injections captured via `@injection.filename` (see
+    /// `tree-sitter-diff`'s `injections.scm`).
+    ///
+    /// Reuses [`Self::from_name`]'s own alias table rather than a second,
+    /// separate extension map: most of its short aliases (`"py"`, `"md"`,
+    /// `"yml"`, `"js"`, `"toml"`, `"cls"`, `"mac"`, ...) already double as
+    /// common file extensions, so keeping one table avoids the two silently
+    /// drifting out of sync.
+    ///
+    /// Returns `None` for an extension with no recognized grammar (for
+    /// example `.rs`, `.go`) or a path with no extension at all.
+    #[must_use]
+    pub fn from_filename(path: &str) -> Option<Self> {
+        let (_, ext) = path.rsplit_once('.')?;
+        Self::from_name(&ext.to_ascii_lowercase())
     }
 }

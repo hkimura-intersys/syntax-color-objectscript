@@ -218,7 +218,16 @@ pub fn resolve_styled_spans_for_source(
 /// Resolves highlight spans into renderable spans by attaching theme styles.
 ///
 /// Resolved capture styles are layered over the theme `normal` style, so token
-/// styles inherit unspecified fields (for example background color).
+/// styles inherit unspecified fields (for example background color). When a
+/// span carries a `background_attr_id` (see that field's own doc comment --
+/// set by `SpanHighlighter::apply_injections` so an injected span, e.g. a
+/// Python `keyword` inside a diff hunk, doesn't lose the outer `diff.plus`
+/// classification the injection would otherwise discard), that attribute's
+/// resolved *background only* is layered in between: `normal` -> ambient
+/// background -> the span's own style. Only `bg` is taken from the ambient
+/// classification -- its fg/bold/italic/underline are deliberately ignored,
+/// so it can only ever wash a color behind the real token, never fight it
+/// for foreground styling.
 ///
 /// # Errors
 ///
@@ -237,13 +246,41 @@ pub fn resolve_styled_spans(
             });
         };
         let capture_style = theme.resolve(&attr.capture_name).copied();
+
+        let background_style = resolve_background_only_style(span.background_attr_id, highlight, theme)?;
+        let base = merge_styles(normal_style, background_style);
+
         out.push(StyledSpan {
             start_byte: span.start_byte,
             end_byte: span.end_byte,
-            style: merge_styles(normal_style, capture_style),
+            style: merge_styles(base, capture_style),
         });
     }
     Ok(out)
+}
+
+/// Resolves `background_attr_id` (if set) to a background-only [`Style`] --
+/// `fg`/`bold`/`italic`/`underline` are always cleared, regardless of what
+/// the theme defines for that capture name, so an ambient classification can
+/// never override a token's own foreground styling.
+fn resolve_background_only_style(
+    background_attr_id: Option<usize>,
+    highlight: &HighlightResult,
+    theme: &Theme,
+) -> Result<Option<Style>, RenderError> {
+    let Some(background_attr_id) = background_attr_id else {
+        return Ok(None);
+    };
+    let Some(attr) = highlight.attrs.get(background_attr_id) else {
+        return Err(RenderError::InvalidAttrId {
+            attr_id: background_attr_id,
+            attrs_len: highlight.attrs.len(),
+        });
+    };
+    let Some(bg) = theme.resolve(&attr.capture_name).and_then(|style| style.bg) else {
+        return Ok(None);
+    };
+    Ok(Some(Style { fg: None, bg: Some(bg), bold: false, italic: false, underline: false }))
 }
 
 /// Builds a VT patch by diffing previous and current styled lines.
@@ -834,4 +871,87 @@ fn compute_line_ranges(source: &[u8]) -> Vec<(usize, usize)> {
     }
     ranges.push((line_start, source.len()));
     ranges
+}
+
+#[cfg(test)]
+mod background_attr_id_tests {
+    use super::*;
+    use highlight_spans::highlight_structures::{Attr, Span};
+    use theme_engine::theme_structures::Rgb;
+
+    fn test_theme() -> Theme {
+        Theme::from_json_str(
+            r#"{
+                "styles": {
+                    "normal": { "fg": { "r": 200, "g": 200, "b": 200 }, "bg": { "r": 0, "g": 0, "b": 0 } },
+                    "diff.plus": { "bg": { "r": 32, "g": 48, "b": 59 } },
+                    "keyword": { "fg": { "r": 192, "g": 153, "b": 255 }, "bold": true }
+                }
+            }"#,
+        )
+        .expect("valid test theme JSON")
+    }
+
+    #[test]
+    fn a_span_with_no_background_attr_id_is_unaffected() {
+        let theme = test_theme();
+        let highlight = HighlightResult {
+            attrs: vec![Attr { id: 0, capture_name: "keyword".to_string() }],
+            spans: vec![Span { attr_id: 0, start_byte: 0, end_byte: 3, background_attr_id: None }],
+        };
+        let resolved = resolve_styled_spans(&highlight, &theme).unwrap();
+        let style = resolved[0].style.unwrap();
+        assert_eq!(style.fg, Some(Rgb::new(192, 153, 255)));
+        assert_eq!(style.bg, Some(Rgb::new(0, 0, 0))); // inherited from "normal", not diff.plus
+    }
+
+    #[test]
+    fn an_injected_span_inherits_the_ambient_background_without_losing_its_own_foreground() {
+        let theme = test_theme();
+        let highlight = HighlightResult {
+            attrs: vec![
+                Attr { id: 0, capture_name: "diff.plus".to_string() },
+                Attr { id: 1, capture_name: "keyword".to_string() },
+            ],
+            spans: vec![Span { attr_id: 1, start_byte: 0, end_byte: 3, background_attr_id: Some(0) }],
+        };
+        let resolved = resolve_styled_spans(&highlight, &theme).unwrap();
+        let style = resolved[0].style.unwrap();
+        // The token's own foreground (keyword, purple) must win...
+        assert_eq!(style.fg, Some(Rgb::new(192, 153, 255)));
+        assert!(style.bold);
+        // ...but the background comes from the ambient diff.plus classification,
+        // not "normal" -- this is the whole point of background_attr_id.
+        assert_eq!(style.bg, Some(Rgb::new(32, 48, 59)));
+    }
+
+    #[test]
+    fn the_ambient_classifications_own_foreground_is_never_used_even_if_the_theme_sets_one() {
+        // diff.plus in the real tokyonight theme is bg-only, but this must
+        // hold even for a theme that (incorrectly, or for some other capture)
+        // sets both -- the ambient background layer's fg/bold/italic/underline
+        // must always be discarded, only bg may pass through.
+        let theme = Theme::from_json_str(
+            r#"{
+                "styles": {
+                    "normal": { "fg": { "r": 200, "g": 200, "b": 200 } },
+                    "diff.plus": { "fg": { "r": 255, "g": 0, "b": 0 }, "bg": { "r": 32, "g": 48, "b": 59 }, "bold": true },
+                    "keyword": { "fg": { "r": 192, "g": 153, "b": 255 } }
+                }
+            }"#,
+        )
+        .unwrap();
+        let highlight = HighlightResult {
+            attrs: vec![
+                Attr { id: 0, capture_name: "diff.plus".to_string() },
+                Attr { id: 1, capture_name: "keyword".to_string() },
+            ],
+            spans: vec![Span { attr_id: 1, start_byte: 0, end_byte: 3, background_attr_id: Some(0) }],
+        };
+        let resolved = resolve_styled_spans(&highlight, &theme).unwrap();
+        let style = resolved[0].style.unwrap();
+        assert_eq!(style.fg, Some(Rgb::new(192, 153, 255)), "keyword's own fg must win, not diff.plus's");
+        assert!(!style.bold, "diff.plus's bold must not leak through the ambient background layer");
+        assert_eq!(style.bg, Some(Rgb::new(32, 48, 59)));
+    }
 }

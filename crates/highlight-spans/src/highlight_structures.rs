@@ -28,6 +28,7 @@ pub(crate) struct HighlightConfig {
     pub(crate) injection_query: Option<Query>,
     pub(crate) injection_content_capture_index: Option<u32>,
     pub(crate) injection_language_capture_index: Option<u32>,
+    pub(crate) injection_filename_capture_index: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -48,6 +49,7 @@ pub enum Grammar {
     ObjectScriptUdl,
     Regex,
     Toml,
+    Diff,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -55,6 +57,18 @@ pub struct Span {
     pub attr_id: usize,
     pub start_byte: usize,
     pub end_byte: usize,
+    /// An ambient background classification (e.g. `diff.plus`) this span
+    /// sits inside, if any. Only the background half of that attribute's
+    /// resolved style is meant to be used -- see
+    /// `render_ansi::common::resolve_styled_spans`'s doc comment for why.
+    ///
+    /// Exists because `SpanHighlighter::apply_injections` otherwise discards
+    /// the outer (host-grammar) span entirely within an injected region: an
+    /// injected Python `keyword` span inside a diff `+` line would lose the
+    /// diff's own green-background classification the moment injection
+    /// replaces the base span. This field lets the injected span carry that
+    /// classification forward instead of losing it.
+    pub background_attr_id: Option<usize>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -100,6 +114,42 @@ pub const JSON_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_json::LA
 pub const JSON_HIGHLIGHTS_QUERY: &str = tree_sitter_json::HIGHLIGHTS_QUERY;
 pub const YAML_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_yaml::LANGUAGE;
 pub const YAML_HIGHLIGHTS_QUERY: &str = tree_sitter_yaml::HIGHLIGHTS_QUERY;
+pub const DIFF_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_diff::LANGUAGE;
+pub const DIFF_HIGHLIGHTS_QUERY: &str = tree_sitter_diff::HIGHLIGHTS_QUERY;
+pub const DIFF_INJECTIONS_QUERY: &str = r#"
+(block
+  (new_file
+    (filename) @injection.filename)
+  (hunks
+    (hunk
+      (changes
+        [
+          (context) @injection.content
+          (addition) @injection.content
+          (deletion)
+          (special)
+          (change)
+          (unrecognized)
+        ]+)))
+  (#offset! @injection.content 0 1 0 1))
+
+; deletions
+(block
+  (old_file
+    (filename) @injection.filename)
+  (hunks
+    (hunk
+      (changes
+        [
+          (context) @injection.content
+          (addition)
+          (deletion) @injection.content
+          (special)
+          (change)
+          (unrecognized)
+        ]+)))
+  (#offset! @injection.content 0 1 0 1))
+"#;
 pub const XML_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_xml::LANGUAGE_XML;
 pub const XML_HIGHLIGHTS_QUERY: &str = tree_sitter_xml::XML_HIGHLIGHT_QUERY;
 pub const XML_IMPLEMENTATION_INJECTIONS_QUERY: &str = r#"
@@ -128,8 +178,7 @@ pub const SQL_LANGUAGE: tree_sitter_language::LanguageFn =
 pub const SQL_HIGHLIGHTS_QUERY: &str =
     include_str!("../vendor/tree-sitter-sql/queries/highlights.scm");
 
-
-pub const SUPPORTED_GRAMMARS: [&str; 16] = [
+pub const SUPPORTED_GRAMMARS: [&str; 17] = [
     "objectscript",
     "objectscript_routine",
     "sql",
@@ -146,6 +195,7 @@ pub const SUPPORTED_GRAMMARS: [&str; 16] = [
     "objectscript_udl",
     "regex",
     "toml",
+    "diff",
 ];
 
 #[derive(Debug)]

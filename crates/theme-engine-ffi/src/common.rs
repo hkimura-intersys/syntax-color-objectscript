@@ -236,6 +236,10 @@ unsafe fn highlight_result_from_ffi(
                 attr_id: span.attr_id,
                 start_byte: span.start_byte,
                 end_byte: span.end_byte,
+                // The C ABI's RawSpan has no background_attr_id field --
+                // ambient-background injection composition is a Rust-side
+                // concern only, not yet exposed across this FFI boundary.
+                background_attr_id: None,
             })
             .collect::<Vec<_>>()
     };

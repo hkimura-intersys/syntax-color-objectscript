@@ -24,19 +24,30 @@ pub fn capture_render_priority(capture_name: &str) -> usize {
     }
 }
 
-/// Locates `injection.content` and `injection.language` captures in a query.
-pub fn injection_capture_indices(query: &tree_sitter::Query) -> (Option<u32>, Option<u32>) {
+/// Locates `injection.content`, `injection.language`, and `injection.filename`
+/// captures in a query.
+///
+/// `injection.filename` is `tree-sitter-diff`'s own convention (see its
+/// `injections.scm`): rather than naming the injected language directly, it
+/// captures the surrounding file's name (e.g. from a `+++ b/foo.py` diff
+/// header) so the caller can derive a language from its extension --
+/// `Grammar::from_filename` is the matching resolver.
+pub fn injection_capture_indices(
+    query: &tree_sitter::Query,
+) -> (Option<u32>, Option<u32>, Option<u32>) {
     let mut content_capture = None;
     let mut language_capture = None;
+    let mut filename_capture = None;
     for (idx, name) in query.capture_names().iter().enumerate() {
         let idx = Some(idx as u32);
         match *name {
             "injection.content" => content_capture = idx,
             "injection.language" => language_capture = idx,
+            "injection.filename" => filename_capture = idx,
             _ => {}
         }
     }
-    (content_capture, language_capture)
+    (content_capture, language_capture, filename_capture)
 }
 
 /// Pushes a span into `spans`, merging with the previous span when adjacent and
@@ -47,7 +58,10 @@ pub fn push_merged(spans: &mut Vec<Span>, next: Span) {
     }
 
     if let Some(last) = spans.last_mut() {
-        if last.attr_id == next.attr_id && last.end_byte == next.start_byte {
+        if last.attr_id == next.attr_id
+            && last.background_attr_id == next.background_attr_id
+            && last.end_byte == next.start_byte
+        {
             last.end_byte = next.end_byte;
             return;
         }
@@ -118,6 +132,7 @@ pub fn exclude_ranges(spans: &[Span], ranges: &[(usize, usize)]) -> Vec<Span> {
                         attr_id: span.attr_id,
                         start_byte: cursor,
                         end_byte: range_start.min(span.end_byte),
+                        background_attr_id: span.background_attr_id,
                     },
                 );
             }
@@ -138,6 +153,7 @@ pub fn exclude_ranges(spans: &[Span], ranges: &[(usize, usize)]) -> Vec<Span> {
                     attr_id: span.attr_id,
                     start_byte: cursor,
                     end_byte: span.end_byte,
+                    background_attr_id: span.background_attr_id,
                 },
             );
         }

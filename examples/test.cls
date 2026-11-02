@@ -3,9 +3,9 @@ Class TestingClassKeywordInheritance.c [Not ProcedureBlock, Language = objectscr
 
     Xdata test [mimetype = "text/markdown"]
     {
-        
+
     }
-    XData SampleAPI [mimetype = "application/yaml"] 
+    XData SampleAPI [mimetype = "application/yaml"]
     {
         swagger: "2.0"
         info:
@@ -28,10 +28,16 @@ Class TestingClassKeywordInheritance.c [Not ProcedureBlock, Language = objectscr
                 description: OK
     }
 
-    XData SampleTest [mimetype = "application/json"] 
+    XData SampleAPI [mimetype ="text/markdown"]
+    {
+        Hey, this is the markdown.
+        # testing
+    }
+
+    XData SampleTest [mimetype = "application/json"]
     {
         {
-        "name" : "hello" , 
+        "name" : "hello" ,
         "okay" : 1,
         }
     }
@@ -42,7 +48,7 @@ Class TestingClassKeywordInheritance.c [Not ProcedureBlock, Language = objectscr
     }
 
     ClassMethod multiplePubVarDefs()  {
-        set y = 24 
+        set y = 24
         w x
         d ..testingIndentation()
     }
@@ -53,4 +59,3 @@ Class TestingClassKeywordInheritance.c [Not ProcedureBlock, Language = objectscr
 
     }
 }
-
