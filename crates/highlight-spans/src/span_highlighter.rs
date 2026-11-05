@@ -29,6 +29,17 @@ const ALL_GRAMMARS: [Grammar; 19] = [
     Grammar::Diff,
     Grammar::Rust,
 ];
+/// Number of ancestors of `node`, used to tell two captures of the same bytes apart: the deeper
+/// node is the one the query meant when it named the more specific thing.
+fn node_depth(node: tree_sitter::Node<'_>) -> usize {
+    let mut depth = 0;
+    let mut current = node;
+    while let Some(parent) = current.parent() {
+        depth += 1;
+        current = parent;
+    }
+    depth
+}
 
 const HIGHLIGHT_TIMING_ENV_VAR: &str = "SYNTAX_COLOR_LOG_HIGHLIGHT_TIMINGS";
 
@@ -828,8 +839,10 @@ impl SpanHighlighter {
 
     /// Highlights source using cached queries with playground-style precedence.
     ///
-    /// Smaller overlapping ranges win over enclosing ranges. For equal ranges, more
-    /// specific capture names win, and remaining ties fall back to later query patterns.
+    /// Smaller overlapping ranges win over enclosing ranges. For equal ranges, the capture
+    /// on the deeper syntax node wins (a literal inside an argument that is only that
+    /// literal), then more specific capture names, and remaining ties fall back to later
+    /// query patterns.
     fn highlight_with_query_cursor(
         source: &[u8],
         attr_ids_by_name: &HashMap<String, usize>,
@@ -864,6 +877,7 @@ impl SpanHighlighter {
                     end_byte,
                     render_priority: capture_render_priority(capture_name),
                     specificity: capture_specificity(capture_name),
+                    depth: node_depth(capture.node),
                     pattern_index: mat.pattern_index,
                     order,
                 });
@@ -897,6 +911,7 @@ impl SpanHighlighter {
                     (
                         candidate.render_priority,
                         Reverse(candidate.end_byte - candidate.start_byte),
+                        candidate.depth,
                         candidate.specificity,
                         candidate.pattern_index,
                         candidate.order,

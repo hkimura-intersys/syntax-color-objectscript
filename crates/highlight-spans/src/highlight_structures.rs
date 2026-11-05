@@ -38,6 +38,9 @@ pub enum Grammar {
     Sql,
     Python,
     Markdown,
+    /// Inline Markdown (emphasis, links, code spans). Injected by [`Grammar::Markdown`]
+    /// into each `inline` node rather than selected directly.
+    MarkdownInline,
     Mdx,
     Xml,
     Json,
@@ -50,6 +53,7 @@ pub enum Grammar {
     Regex,
     Toml,
     Diff,
+    Rust,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -114,6 +118,9 @@ pub const JSON_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_json::LA
 pub const JSON_HIGHLIGHTS_QUERY: &str = tree_sitter_json::HIGHLIGHTS_QUERY;
 pub const YAML_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_yaml::LANGUAGE;
 pub const YAML_HIGHLIGHTS_QUERY: &str = tree_sitter_yaml::HIGHLIGHTS_QUERY;
+pub const RUST_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_rust::LANGUAGE;
+pub const RUST_HIGHLIGHTS_QUERY: &str = tree_sitter_rust::HIGHLIGHTS_QUERY;
+pub const RUST_INJECTIONS_QUERY: &str = tree_sitter_rust::INJECTIONS_QUERY;
 pub const DIFF_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_diff::LANGUAGE;
 pub const DIFF_HIGHLIGHTS_QUERY: &str = tree_sitter_diff::HIGHLIGHTS_QUERY;
 pub const DIFF_INJECTIONS_QUERY: &str = r#"
@@ -178,12 +185,13 @@ pub const SQL_LANGUAGE: tree_sitter_language::LanguageFn =
 pub const SQL_HIGHLIGHTS_QUERY: &str =
     include_str!("../vendor/tree-sitter-sql/queries/highlights.scm");
 
-pub const SUPPORTED_GRAMMARS: [&str; 17] = [
+pub const SUPPORTED_GRAMMARS: [&str; 19] = [
     "objectscript",
     "objectscript_routine",
     "sql",
     "python",
     "markdown",
+    "markdown_inline",
     "mdx",
     "xml",
     "json",
@@ -196,6 +204,7 @@ pub const SUPPORTED_GRAMMARS: [&str; 17] = [
     "regex",
     "toml",
     "diff",
+    "rust",
 ];
 
 #[derive(Debug)]
@@ -205,6 +214,7 @@ pub(crate) struct CaptureCandidate {
     pub(crate) end_byte: usize,
     pub(crate) render_priority: usize,
     pub(crate) specificity: usize,
+    pub(crate) depth: usize, // num of ancestors of the captured node.
     pub(crate) pattern_index: usize,
     pub(crate) order: usize,
 }
