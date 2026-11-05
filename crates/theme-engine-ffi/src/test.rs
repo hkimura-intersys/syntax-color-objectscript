@@ -169,4 +169,49 @@ mod tests {
         unsafe { syntax_color_incremental_renderer_free(renderer) };
         unsafe { theme_engine_theme_free(theme) };
     }
+
+    #[test]
+    fn ffi_highlight_accepts_every_grammar_code() {
+        let mut highlighter: *mut SyntaxColorHighlighter = ptr::null_mut();
+        // SAFETY: output pointer is valid.
+        let code = unsafe { syntax_color_highlighter_new(&mut highlighter) };
+        assert_eq!(code, SYNTAX_COLOR_FFI_OK);
+
+        let source = b"x = 1";
+        for grammar in 0..=17 {
+            let mut result = SyntaxColorHighlightResult::default();
+            // SAFETY: handle, input buffer, and output pointer are valid.
+            let code = unsafe {
+                syntax_color_highlighter_highlight(
+                    highlighter,
+                    source.as_ptr(),
+                    source.len(),
+                    grammar,
+                    &mut result,
+                )
+            };
+            assert_eq!(
+                code, SYNTAX_COLOR_FFI_OK,
+                "grammar code {grammar} was rejected"
+            );
+            // SAFETY: result payload was allocated by this crate.
+            unsafe { syntax_color_highlight_result_free(&mut result) };
+        }
+
+        let mut result = SyntaxColorHighlightResult::default();
+        // SAFETY: handle, input buffer, and output pointer are valid.
+        let code = unsafe {
+            syntax_color_highlighter_highlight(
+                highlighter,
+                source.as_ptr(),
+                source.len(),
+                18,
+                &mut result,
+            )
+        };
+        assert_eq!(code, SYNTAX_COLOR_FFI_ERR_INVALID_ARGUMENT);
+
+        // SAFETY: handle was allocated by this crate.
+        unsafe { syntax_color_highlighter_free(highlighter) };
+    }
 }

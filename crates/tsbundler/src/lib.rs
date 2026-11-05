@@ -14,7 +14,7 @@ use std::{
 };
 use theme_engine::{
     common::{load_theme, normalize_capture_name},
-    theme_structures::{available_themes, BuiltinTheme, Rgb as ThemeRgb, Style as ThemeStyle},
+    theme_structures::{BuiltinTheme, Rgb as ThemeRgb, Style as ThemeStyle, available_themes},
 };
 
 // =============================================================================
@@ -171,6 +171,14 @@ fn canonical_theme_name(name: &str) -> Option<&'static str> {
 }
 
 impl ActivatedTheme {
+    /// Whether the element with zedit index `index` defines a background color.
+    fn element_has_bg(&self, index: ZeditAttr) -> bool {
+        index != ZEDIT_ATTR_NONE
+            && self
+                .elements
+                .get(usize::from(index) - 1)
+                .is_some_and(|elem| elem.bg != ZEDIT_RGBNONE)
+    }
     fn from_name(theme_name: &str) -> Result<Self, String> {
         let engine_theme = load_theme(theme_name)
             .map_err(|e| format!("failed to load theme {theme_name}: {e}"))?;
@@ -262,6 +270,8 @@ fn build_lang_registry() -> Vec<LangEntry> {
         ("regex", &[]),
         ("toml", &[".toml"]),
         ("mdx", &[]),
+        ("diff", &[".diff", ".patch"]),
+        ("rust", &[".rs"]),
     ];
 
     grammar_exts
@@ -313,13 +323,11 @@ impl tsbundler_ctx_s {
         let mut themes = Vec::with_capacity(theme_names.len());
         let mut theme_lookup = HashMap::new();
         for &name in theme_names {
-            match ActivatedTheme::from_name(name) {
-                Ok(theme) => {
-                    let i = themes.len();
-                    theme_lookup.insert(name.to_string(), i);
-                    themes.push(theme);
-                }
-                Err(_) => {} // skip broken themes
+            // Skip broken themes.
+            if let Ok(theme) = ActivatedTheme::from_name(name) {
+                let i = themes.len();
+                theme_lookup.insert(name.to_string(), i);
+                themes.push(theme);
             }
         }
 
@@ -336,11 +344,11 @@ impl tsbundler_ctx_s {
     }
 
     fn log(&self, log_type: i32, msg: &str) {
-        if let Some(logger) = self.logger {
-            if let Ok(c_msg) = CString::new(msg) {
-                unsafe {
-                    logger(self.logger_payload, log_type, c_msg.as_ptr());
-                }
+        if let Some(logger) = self.logger
+            && let Ok(c_msg) = CString::new(msg)
+        {
+            unsafe {
+                logger(self.logger_payload, log_type, c_msg.as_ptr());
             }
         }
     }
@@ -368,6 +376,8 @@ pub struct tsbundler_doc_s {
     ctx: *mut tsbundler_ctx_s,
     grammar: Grammar,
     state: Option<DocState>,
+    bg_attrs_fn: TsbundlerAttrsFn,
+    bg_attrs_payload: *mut c_void,
 }
 
 unsafe impl Send for tsbundler_doc_s {}
@@ -390,12 +400,12 @@ unsafe fn ingest_lines(
     for row in 0..total_lines {
         let mut bytes_read: u32 = 0;
         // Request line at column 0 — tree-sitter wants the whole line.
-        let ptr = read_fn(read_payload, 0, row, 0, &mut bytes_read);
+        let ptr = unsafe { read_fn(read_payload, 0, row, 0, &mut bytes_read) };
         if ptr.is_null() || bytes_read == 0 {
             lines.push(String::new());
             continue;
         }
-        let raw = slice::from_raw_parts(ptr as *const u8, bytes_read as usize);
+        let raw = unsafe { slice::from_raw_parts(ptr as *const u8, bytes_read as usize) };
         let line_text = match encoding {
             TsbundlerEncoding::Utf16Le => {
                 // raw is UTF-16LE byte pairs
@@ -409,7 +419,7 @@ unsafe fn ingest_lines(
                     .rposition(|&c| c != b'\n' as u16 && c != b'\r' as u16)
                     .map(|p| p + 1)
                     .unwrap_or(0);
-                String::from_utf16_lossy(&units[..end]).into()
+                String::from_utf16_lossy(&units[..end])
             }
             TsbundlerEncoding::Utf8 => {
                 // Strip trailing newline bytes
@@ -430,7 +440,7 @@ unsafe fn ingest_lines(
                     .rposition(|&c| c != b'\n' as u16 && c != b'\r' as u16)
                     .map(|p| p + 1)
                     .unwrap_or(0);
-                String::from_utf16_lossy(&units[..end]).into()
+                String::from_utf16_lossy(&units[..end])
             }
         };
         lines.push(line_text);
@@ -444,12 +454,13 @@ unsafe fn ingest_lines(
 
 /// Build per-line per-character attr arrays from a `HighlightResult`.
 /// `lines_utf8` is the per-line text (without newlines).
-/// Returns `Vec<Vec<ZeditAttr>>` — one entry per line, one u16 per char.
+/// Returns `(attrs, bg_attrs)` — each is one entry per line, one u16 per char.
+/// `bg_attrs` holds the element index of each char's background.
 fn highlight_to_line_attrs(
     result: &HighlightResult,
     theme: &ActivatedTheme,
     lines_utf8: &[String],
-) -> Vec<Vec<ZeditAttr>> {
+) -> (Vec<Vec<ZeditAttr>>, Vec<Vec<ZeditAttr>>) {
     // Build per-line byte-start table for the joined source (lines joined by '\n').
     let mut line_start: Vec<usize> = Vec::with_capacity(lines_utf8.len());
     let mut offset = 0usize;
@@ -463,15 +474,22 @@ fn highlight_to_line_attrs(
         .iter()
         .map(|l| vec![ZEDIT_ATTR_NONE; l.chars().count()])
         .collect();
-
-    for span in &result.spans {
-        let capture_name = result
+    let mut bg_line_attrs: Vec<Vec<ZeditAttr>> = line_attrs.clone();
+    let capture_index = |attr_id: usize| {
+        result
             .attrs
-            .get(span.attr_id)
-            .map(|a| a.capture_name.as_str())
-            .unwrap_or("");
-        let attr_val = theme.resolve_capture_index(capture_name);
-        if attr_val == ZEDIT_ATTR_NONE {
+            .get(attr_id)
+            .map(|a| theme.resolve_capture_index(&a.capture_name))
+            .unwrap_or(ZEDIT_ATTR_NONE)
+    };
+    for span in &result.spans {
+        let attr_val = capture_index(span.attr_id);
+        let bg_val = span
+            .background_attr_id
+            .map(capture_index)
+            .filter(|&index| theme.element_has_bg(index))
+            .unwrap_or(ZEDIT_ATTR_NONE);
+        if attr_val == ZEDIT_ATTR_NONE && bg_val == ZEDIT_ATTR_NONE {
             continue;
         }
 
@@ -494,35 +512,46 @@ fn highlight_to_line_attrs(
             let char_start = line[..local_start.min(line.len())].chars().count();
             let char_end = line[..local_end].chars().count();
 
-            if let Some(row_attrs) = line_attrs.get_mut(row) {
-                for col in char_start..char_end.min(row_attrs.len()) {
-                    row_attrs[col] = attr_val;
-                }
+            if attr_val != ZEDIT_ATTR_NONE {
+                let end = char_end.min(line_attrs[row].len());
+                line_attrs[row][char_start..end].fill(attr_val);
+            }
+            if bg_val != ZEDIT_ATTR_NONE {
+                let end = char_end.min(bg_line_attrs[row].len());
+                bg_line_attrs[row][char_start..end].fill(bg_val);
             }
         }
     }
-
-    line_attrs
+    (line_attrs, bg_line_attrs)
 }
 
-/// Deliver `line_attrs` to zedit via the pull callback.
+/// Copies per-line attrs into host buffers obtained from `attrs_fn`.
+///
+/// With `clear_unset`, rows whose attrs are all `ZEDIT_ATTR_NONE` (including
+/// empty rows) get `attrs_fn(row, 0)` instead, telling the host to drop any
+/// buffer it keeps for that row (see `tsbundler_doc_set_bg_attrs`).
 unsafe fn deliver_attrs(
     lines_utf8: &[String],
     line_attrs: &[Vec<ZeditAttr>],
     attrs_fn: TsbundlerAttrsFn,
     attrs_payload: *mut c_void,
+    clear_unset: bool,
 ) {
     let Some(cb) = attrs_fn else { return };
     for (row, (attrs, line)) in line_attrs.iter().zip(lines_utf8.iter()).enumerate() {
+        if clear_unset && attrs.iter().all(|&attr| attr == ZEDIT_ATTR_NONE) {
+            unsafe { cb(attrs_payload, row as u32, 0) };
+            continue;
+        }
         let nchars = line.chars().count() as u32;
         if nchars == 0 {
             continue;
         }
-        let buf = cb(attrs_payload, row as u32, nchars);
+        let buf = unsafe { cb(attrs_payload, row as u32, nchars) };
         if buf.is_null() {
             continue;
         }
-        let out = slice::from_raw_parts_mut(buf, nchars as usize);
+        let out = unsafe { slice::from_raw_parts_mut(buf, nchars as usize) };
         out.copy_from_slice(&attrs[..nchars as usize]);
     }
 }
@@ -531,7 +560,7 @@ unsafe fn deliver_attrs(
 // C API — library context (§4, §5, §6, §7)
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn tsbundler_init() -> *mut tsbundler_ctx_s {
     match tsbundler_ctx_s::new() {
         Some(ctx) => Box::into_raw(Box::new(ctx)),
@@ -539,54 +568,62 @@ pub extern "C" fn tsbundler_init() -> *mut tsbundler_ctx_s {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tsbundler_free(ctx: *mut tsbundler_ctx_s) {
     if !ctx.is_null() {
-        drop(Box::from_raw(ctx));
+        drop(unsafe { Box::from_raw(ctx) });
     }
 }
 
 /// §5 — install log relay.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tsbundler_set_logger(
     ctx: *mut tsbundler_ctx_s,
     logger: TsbundlerLogFn,
     payload: *mut c_void,
 ) {
-    let Some(ctx) = ctx.as_mut() else { return };
+    let Some(ctx) = (unsafe { ctx.as_mut() }) else {
+        return;
+    };
     ctx.logger = logger;
     ctx.logger_payload = payload;
 }
 
 /// §6 — enumerate bundled grammars (callback-based).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tsbundler_enum_langs(
     ctx: *mut tsbundler_ctx_s,
     callback: TsbundlerLangFn,
     userdata: *mut c_void,
 ) -> ssize_t {
-    let Some(ctx) = ctx.as_ref() else { return -1 };
+    let Some(ctx) = (unsafe { ctx.as_ref() }) else {
+        return -1;
+    };
     let count = ctx.langs.len() as ssize_t;
     let Some(cb) = callback else { return count };
     for entry in &ctx.langs {
         let ext_ptrs: Vec<*const c_char> = entry.c_extensions.iter().map(|e| e.as_ptr()).collect();
-        cb(
-            userdata,
-            entry.c_name.as_ptr(),
-            ext_ptrs.as_ptr(),
-            entry.c_extensions.len() as c_int,
-        );
+        unsafe {
+            cb(
+                userdata,
+                entry.c_name.as_ptr(),
+                ext_ptrs.as_ptr(),
+                entry.c_extensions.len() as c_int,
+            )
+        };
     }
     count
 }
 
 /// §6 — check if a grammar is bundled.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tsbundler_supports_lang(
     ctx: *mut tsbundler_ctx_s,
     lang: *const c_char,
 ) -> c_int {
-    let Some(ctx) = ctx.as_ref() else { return 0 };
+    let Some(ctx) = (unsafe { ctx.as_ref() }) else {
+        return 0;
+    };
     let Ok(lang) = (unsafe { CStr::from_ptr(lang) }).to_str() else {
         return 0;
     };
@@ -594,34 +631,36 @@ pub unsafe extern "C" fn tsbundler_supports_lang(
 }
 
 /// §7 — enumerate bundled themes (callback-based).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tsbundler_enum_themes(
     ctx: *mut tsbundler_ctx_s,
     callback: TsbundlerThemeFn,
     userdata: *mut c_void,
 ) -> ssize_t {
-    let Some(ctx) = ctx.as_ref() else { return -1 };
+    let Some(ctx) = (unsafe { ctx.as_ref() }) else {
+        return -1;
+    };
     let count = ctx.themes.len() as ssize_t;
     let Some(cb) = callback else { return count };
     for theme in &ctx.themes {
-        cb(userdata, theme.c_name.as_ptr());
+        unsafe { cb(userdata, theme.c_name.as_ptr()) };
     }
     count
 }
 
 /// §7 — activate a theme and enumerate its elements via callback.
 /// Returns element count on success, negative TSBUNDLER_ERR_NOTHEME if not found.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tsbundler_theme_activate(
     ctx: *mut tsbundler_ctx_s,
     name: *const c_char,
     callback: TsbundlerElemFn,
     userdata: *mut c_void,
 ) -> ssize_t {
-    let Some(ctx) = ctx.as_mut() else {
+    let Some(ctx) = (unsafe { ctx.as_mut() }) else {
         return -(TsbundlerError::ErrInternal as i32) as ssize_t;
     };
-    let Ok(name_str) = CStr::from_ptr(name).to_str() else {
+    let Ok(name_str) = (unsafe { CStr::from_ptr(name) }).to_str() else {
         return -(TsbundlerError::ErrInternal as i32) as ssize_t;
     };
     let canonical = match canonical_theme_name(name_str) {
@@ -636,14 +675,16 @@ pub unsafe extern "C" fn tsbundler_theme_activate(
     let count = theme.elements.len() as ssize_t;
     let Some(cb) = callback else { return count };
     for elem in &theme.elements {
-        cb(
-            userdata,
-            elem.name.as_ptr(),
-            elem.fg,
-            elem.bg,
-            elem.attrs,
-            elem.index as c_int,
-        );
+        unsafe {
+            cb(
+                userdata,
+                elem.name.as_ptr(),
+                elem.fg,
+                elem.bg,
+                elem.attrs,
+                elem.index as c_int,
+            )
+        };
     }
     count
 }
@@ -656,7 +697,7 @@ pub unsafe extern "C" fn tsbundler_theme_activate(
 ///
 /// On success, writes fg, bg, attrs into the out-pointers and returns TSBUNDLER_OK.
 /// Returns negative error code if the role is not found or no theme is active.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tsbundler_theme_resolve_ui(
     ctx: *mut tsbundler_ctx_s,
     role_name: *const c_char,
@@ -664,10 +705,10 @@ pub unsafe extern "C" fn tsbundler_theme_resolve_ui(
     out_bg: *mut ZeditRgb,
     out_attrs: *mut ZeditVduAttr,
 ) -> c_int {
-    let Some(ctx) = ctx.as_ref() else {
+    let Some(ctx) = (unsafe { ctx.as_ref() }) else {
         return -(TsbundlerError::ErrInternal as i32);
     };
-    let Ok(name_str) = CStr::from_ptr(role_name).to_str() else {
+    let Ok(name_str) = (unsafe { CStr::from_ptr(role_name) }).to_str() else {
         return -(TsbundlerError::ErrInternal as i32);
     };
     let Some(idx) = ctx.active_theme else {
@@ -679,13 +720,13 @@ pub unsafe extern "C" fn tsbundler_theme_resolve_ui(
     };
 
     if !out_fg.is_null() {
-        *out_fg = style.fg.map(rgb_to_packed).unwrap_or(ZEDIT_RGBNONE);
+        unsafe { *out_fg = style.fg.map(rgb_to_packed).unwrap_or(ZEDIT_RGBNONE) };
     }
     if !out_bg.is_null() {
-        *out_bg = style.bg.map(rgb_to_packed).unwrap_or(ZEDIT_RGBNONE);
+        unsafe { *out_bg = style.bg.map(rgb_to_packed).unwrap_or(ZEDIT_RGBNONE) };
     }
     if !out_attrs.is_null() {
-        *out_attrs = style_to_vdu_attr(&style);
+        unsafe { *out_attrs = style_to_vdu_attr(&style) };
     }
     TsbundlerError::Ok as c_int
 }
@@ -694,15 +735,15 @@ pub unsafe extern "C" fn tsbundler_theme_resolve_ui(
 // C API — document (§8)
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tsbundler_doc_create(
     ctx: *mut tsbundler_ctx_s,
     lang: *const c_char,
 ) -> *mut tsbundler_doc_s {
-    let Some(ctx_ref) = ctx.as_ref() else {
+    let Some(ctx_ref) = (unsafe { ctx.as_ref() }) else {
         return ptr::null_mut();
     };
-    let Ok(lang_str) = CStr::from_ptr(lang).to_str() else {
+    let Ok(lang_str) = (unsafe { CStr::from_ptr(lang) }).to_str() else {
         return ptr::null_mut();
     };
     let Some(grammar) = ctx_ref.grammar_for_lang(lang_str) else {
@@ -712,18 +753,37 @@ pub unsafe extern "C" fn tsbundler_doc_create(
         ctx,
         grammar,
         state: None,
+        bg_attrs_fn: None,
+        bg_attrs_payload: ptr::null_mut(),
     }))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tsbundler_doc_free(doc: *mut tsbundler_doc_s) {
     if !doc.is_null() {
-        drop(Box::from_raw(doc));
+        drop(unsafe { Box::from_raw(doc) });
     }
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tsbundler_doc_set_bg_attrs(
+    doc: *mut tsbundler_doc_s,
+    bg_attrs: TsbundlerAttrsFn,
+    bg_payload: *mut c_void,
+) -> TsbundlerError {
+    if doc.is_null() {
+        return TsbundlerError::ErrInternal;
+    }
+    let Some(doc) = (unsafe { doc.as_mut() }) else {
+        return TsbundlerError::ErrInternal;
+    };
+    doc.bg_attrs_fn = bg_attrs;
+    doc.bg_attrs_payload = bg_payload;
+    TsbundlerError::Ok
+}
+
 /// §7.3 — full parse.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tsbundler_doc_parse_full(
     doc: *mut tsbundler_doc_s,
     read: TsbundlerReadFn,
@@ -733,10 +793,10 @@ pub unsafe extern "C" fn tsbundler_doc_parse_full(
     attrs_fn: TsbundlerAttrsFn,
     attrs_payload: *mut c_void,
 ) -> TsbundlerError {
-    let Some(doc) = doc.as_mut() else {
+    let Some(doc) = (unsafe { doc.as_mut() }) else {
         return TsbundlerError::ErrInternal;
     };
-    let Some(ctx) = doc.ctx.as_mut() else {
+    let Some(ctx) = (unsafe { doc.ctx.as_mut() }) else {
         return TsbundlerError::ErrInternal;
     };
     let Some(theme_idx) = ctx.active_theme else {
@@ -744,7 +804,8 @@ pub unsafe extern "C" fn tsbundler_doc_parse_full(
         return TsbundlerError::ErrNoTheme;
     };
 
-    let Some(lines_utf8) = ingest_lines(read, read_payload, encoding, total_lines) else {
+    let Some(lines_utf8) = (unsafe { ingest_lines(read, read_payload, encoding, total_lines) })
+    else {
         return TsbundlerError::ErrInternal;
     };
 
@@ -758,8 +819,17 @@ pub unsafe extern "C" fn tsbundler_doc_parse_full(
     };
 
     let theme = &ctx.themes[theme_idx];
-    let line_attrs = highlight_to_line_attrs(&result, theme, &lines_utf8);
-    deliver_attrs(&lines_utf8, &line_attrs, attrs_fn, attrs_payload);
+    let (line_attrs, bg_line_attrs) = highlight_to_line_attrs(&result, theme, &lines_utf8);
+    unsafe { deliver_attrs(&lines_utf8, &line_attrs, attrs_fn, attrs_payload, false) };
+    unsafe {
+        deliver_attrs(
+            &lines_utf8,
+            &bg_line_attrs,
+            doc.bg_attrs_fn,
+            doc.bg_attrs_payload,
+            true,
+        )
+    };
 
     doc.state = Some(DocState {
         grammar: doc.grammar,
@@ -775,7 +845,7 @@ pub unsafe extern "C" fn tsbundler_doc_parse_full(
 /// For edit geometry, `edits` is provided for future incremental tree reuse.
 /// Current implementation: full reparse, then diff attrs line-by-line to find
 /// changed lines and fire `on_changed` only for those.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn tsbundler_doc_edit(
     doc: *mut tsbundler_doc_s,
     _edits: *const TsbundlerEdit,
@@ -789,10 +859,10 @@ pub unsafe extern "C" fn tsbundler_doc_edit(
     on_changed: TsbundlerRangeFn,
     on_changed_payload: *mut c_void,
 ) -> TsbundlerError {
-    let Some(doc) = doc.as_mut() else {
+    let Some(doc) = (unsafe { doc.as_mut() }) else {
         return TsbundlerError::ErrInternal;
     };
-    let Some(ctx) = doc.ctx.as_mut() else {
+    let Some(ctx) = (unsafe { doc.ctx.as_mut() }) else {
         return TsbundlerError::ErrInternal;
     };
     let Some(theme_idx) = ctx.active_theme else {
@@ -800,7 +870,8 @@ pub unsafe extern "C" fn tsbundler_doc_edit(
         return TsbundlerError::ErrNoTheme;
     };
 
-    let Some(lines_utf8) = ingest_lines(read, read_payload, encoding, total_lines) else {
+    let Some(lines_utf8) = (unsafe { ingest_lines(read, read_payload, encoding, total_lines) })
+    else {
         return TsbundlerError::ErrInternal;
     };
 
@@ -814,31 +885,40 @@ pub unsafe extern "C" fn tsbundler_doc_edit(
     };
 
     let theme = &ctx.themes[theme_idx];
-    let new_attrs = highlight_to_line_attrs(&result, theme, &lines_utf8);
-    deliver_attrs(&lines_utf8, &new_attrs, attrs_fn, attrs_payload);
+    let (new_attrs, new_bg_attrs) = highlight_to_line_attrs(&result, theme, &lines_utf8);
+    unsafe { deliver_attrs(&lines_utf8, &new_attrs, attrs_fn, attrs_payload, false) };
+    unsafe {
+        deliver_attrs(
+            &lines_utf8,
+            &new_bg_attrs,
+            doc.bg_attrs_fn,
+            doc.bg_attrs_payload,
+            true,
+        )
+    };
 
     // Diff against previous attrs to fire on_changed for changed line ranges.
-    if let Some(ref state) = doc.state {
-        if let Some(cb) = on_changed {
-            let old_attrs = &state.last_attrs;
-            let n = new_attrs.len().max(old_attrs.len());
-            let mut range_start: Option<u32> = None;
-            for row in 0..n {
-                let new_row = new_attrs.get(row).map(Vec::as_slice).unwrap_or(&[]);
-                let old_row = old_attrs.get(row).map(Vec::as_slice).unwrap_or(&[]);
-                let changed = new_row != old_row;
-                match (changed, range_start) {
-                    (true, None) => range_start = Some(row as u32),
-                    (false, Some(start)) => {
-                        cb(on_changed_payload, start, (row - 1) as u32);
-                        range_start = None;
-                    }
-                    _ => {}
+    if let Some(ref state) = doc.state
+        && let Some(cb) = on_changed
+    {
+        let old_attrs = &state.last_attrs;
+        let n = new_attrs.len().max(old_attrs.len());
+        let mut range_start: Option<u32> = None;
+        for row in 0..n {
+            let new_row = new_attrs.get(row).map(Vec::as_slice).unwrap_or(&[]);
+            let old_row = old_attrs.get(row).map(Vec::as_slice).unwrap_or(&[]);
+            let changed = new_row != old_row;
+            match (changed, range_start) {
+                (true, None) => range_start = Some(row as u32),
+                (false, Some(start)) => {
+                    unsafe { cb(on_changed_payload, start, (row - 1) as u32) };
+                    range_start = None;
                 }
+                _ => {}
             }
-            if let Some(start) = range_start {
-                cb(on_changed_payload, start, (n - 1) as u32);
-            }
+        }
+        if let Some(start) = range_start {
+            unsafe { cb(on_changed_payload, start, (n - 1) as u32) };
         }
     }
 
@@ -854,7 +934,7 @@ pub unsafe extern "C" fn tsbundler_doc_edit(
 // =============================================================================
 // recall_syntax_color_shim interface
 //
-// termio.c loads this dylib as "recall_syntax_color_shim" and calls:
+// IRIS termio.c loads this from the "irisutils" library and calls:
 //
 //   int recall_ansi_color_render_range(
 //       ucp  srcbuf,    // line as 8-bit chars (ASCII/latin-1)
@@ -863,9 +943,12 @@ pub unsafe extern "C" fn tsbundler_doc_edit(
 //       int  n,         // number of chars to render
 //       ucp  outbuf,    // caller-allocated output buffer
 //       int  outcap,    // output buffer capacity in bytes
-//       int *pansilen   // set to bytes written on success
+//       int  lang_tag,  // 1 = SQL, 2 = Python, 3 = MDX, else ObjectScript
+//       int *pansilen   // bytes written, or bytes needed if outcap is too small
 //   );
 //   returns 1 on success, 0 on failure/fallback
+//
+// Declared in include/zedit_ts.h.
 // =============================================================================
 
 struct RecallShimState {
@@ -905,7 +988,7 @@ fn recall_shim_ensure_init() -> bool {
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn recall_ansi_color_render_range(
     srcbuf: *const c_uchar,
     linelen: c_int,
@@ -939,7 +1022,7 @@ pub unsafe extern "C" fn recall_ansi_color_render_range(
         None => return 0,
     };
 
-    let line = slice::from_raw_parts(srcbuf, linelen);
+    let line = unsafe { slice::from_raw_parts(srcbuf, linelen) };
 
     // Only re-parse if the line content or grammar changed since last call.
     if state.cached_line != line || state.cached_lang != lang_tag {
@@ -984,7 +1067,7 @@ pub unsafe extern "C" fn recall_ansi_color_render_range(
     };
 
     if rendered.is_empty() {
-        *pansilen = 0;
+        unsafe { *pansilen = 0 };
         return 1;
     }
 
@@ -994,11 +1077,57 @@ pub unsafe extern "C" fn recall_ansi_color_render_range(
 
     if out_bytes.len() > outcap {
         // Signal needed size; C caller will grow the buffer and retry.
-        *pansilen = out_bytes.len() as c_int;
+        unsafe { *pansilen = out_bytes.len() as c_int };
         return 1;
     }
 
-    ptr::copy_nonoverlapping(out_bytes.as_ptr(), outbuf, out_bytes.len());
-    *pansilen = out_bytes.len() as c_int;
+    unsafe { ptr::copy_nonoverlapping(out_bytes.as_ptr(), outbuf, out_bytes.len()) };
+    unsafe { *pansilen = out_bytes.len() as c_int };
     1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn injected_diff_lines_carry_the_diff_background() {
+        let theme = ActivatedTheme::from_name("tokyonight-dark").expect("theme loads");
+        let plus = theme.index_by_style_key["diff.plus"];
+        let keyword = theme.resolve_capture_index("keyword");
+        assert!(
+            theme.element_has_bg(plus),
+            "test theme must give diff.plus a bg"
+        );
+
+        let lines: Vec<String> = [
+            "diff --git a/foo.py b/foo.py",
+            "index 1234567..89abcde 100644",
+            "--- a/foo.py",
+            "+++ b/foo.py",
+            "@@ -1,2 +1,2 @@",
+            "-import os",
+            "+import sys",
+            " def main():",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+        let source = lines.join("\n");
+        let mut highlighter = SpanHighlighter::new().expect("highlighter builds");
+        let result = highlighter
+            .highlight(source.as_bytes(), Grammar::Diff)
+            .expect("diff highlights");
+
+        let (attrs, bg_attrs) = highlight_to_line_attrs(&result, &theme, &lines);
+
+        // "+import sys": `import` keeps its keyword element and sits on diff.plus.
+        let row = 6;
+        for col in 1..7 {
+            assert_eq!(attrs[row][col], keyword, "attrs[{row}][{col}]");
+            assert_eq!(bg_attrs[row][col], plus, "bg_attrs[{row}][{col}]");
+        }
+        // The context line has no ambient background.
+        assert!(bg_attrs[7].iter().all(|&attr| attr == ZEDIT_ATTR_NONE));
+    }
 }

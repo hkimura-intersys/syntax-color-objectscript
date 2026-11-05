@@ -57,14 +57,13 @@ pub fn push_merged(spans: &mut Vec<Span>, next: Span) {
         return;
     }
 
-    if let Some(last) = spans.last_mut() {
-        if last.attr_id == next.attr_id
-            && last.background_attr_id == next.background_attr_id
-            && last.end_byte == next.start_byte
-        {
-            last.end_byte = next.end_byte;
-            return;
-        }
+    if let Some(last) = spans.last_mut()
+        && last.attr_id == next.attr_id
+        && last.background_attr_id == next.background_attr_id
+        && last.end_byte == next.start_byte
+    {
+        last.end_byte = next.end_byte;
+        return;
     }
 
     spans.push(next);
@@ -172,13 +171,13 @@ pub fn normalize_spans(mut spans: Vec<Span>) -> Vec<Span> {
 
     let mut out: Vec<Span> = Vec::with_capacity(spans.len());
     for mut span in spans {
-        if let Some(last) = out.last() {
-            if span.start_byte < last.end_byte {
-                if span.end_byte <= last.end_byte {
-                    continue;
-                }
-                span.start_byte = last.end_byte;
+        if let Some(last) = out.last()
+            && span.start_byte < last.end_byte
+        {
+            if span.end_byte <= last.end_byte {
+                continue;
             }
+            span.start_byte = last.end_byte;
         }
         push_merged(&mut out, span);
     }

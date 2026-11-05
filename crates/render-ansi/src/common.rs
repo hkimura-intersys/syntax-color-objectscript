@@ -710,17 +710,15 @@ fn style_open_sgr(
         };
         parts.push(sgr);
     }
-    if !preserve_terminal_background {
-        if let Some(bg) = style.bg {
-            let sgr = match color_mode {
-                ColorMode::TrueColor => format!("48;2;{};{};{}", bg.r, bg.g, bg.b),
-                ColorMode::Ansi256 => format!("48;5;{}", rgb_to_ansi256(bg.r, bg.g, bg.b)),
-                ColorMode::Ansi16 => {
-                    format!("{}", ansi16_bg_sgr(rgb_to_ansi16(bg.r, bg.g, bg.b)))
-                }
-            };
-            parts.push(sgr);
-        }
+    if !preserve_terminal_background && let Some(bg) = style.bg {
+        let sgr = match color_mode {
+            ColorMode::TrueColor => format!("48;2;{};{};{}", bg.r, bg.g, bg.b),
+            ColorMode::Ansi256 => format!("48;5;{}", rgb_to_ansi256(bg.r, bg.g, bg.b)),
+            ColorMode::Ansi16 => {
+                format!("{}", ansi16_bg_sgr(rgb_to_ansi16(bg.r, bg.g, bg.b)))
+            }
+        };
+        parts.push(sgr);
     }
     if style.bold {
         parts.push("1".to_string());

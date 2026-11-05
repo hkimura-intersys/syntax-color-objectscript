@@ -165,11 +165,14 @@ fn grammar_source(grammar: Grammar) -> GrammarSource {
 /// highlighting.
 const MAX_INJECTION_DEPTH: usize = 3;
 
-/// Finds the attr id of a base (pre-injection) span covering byte `start`,
-/// if any -- used to carry an ambient background classification (e.g.
-/// `diff.plus`) forward into the spans that will replace it. `base_spans` is
-/// normalized (sorted, non-overlapping), so at most one span can cover any
-/// given byte; this returns that one, or `None` if `start` falls in a gap.
+/// Finds the attr id of a base (pre-injection) span that covers the whole
+/// injection region `[start, end)` of `source`, if any -- used to carry an
+/// ambient background classification (e.g. `diff.plus`) forward into the
+/// spans that will replace it. `base_spans` is normalized (sorted,
+/// non-overlapping), so at most one span can cover `start`; it only counts as
+/// ambient if nothing but whitespace (such as a diff line's trailing `\n`)
+/// lies between its end and `end`. A span covering just the region's first
+/// token (e.g. the `(` opening a Rust macro's token tree) returns `None`.
 fn base_attr_covering(
     base_spans: &[Span],
     source: &[u8],

@@ -24,3 +24,13 @@ It supports:
 - emitting OSC default-color helpers (`syntax_color_osc_*`)
 
 See [`include/theme_engine_ffi.h`](include/theme_engine_ffi.h) for the C ABI.
+
+Functions that take a `grammar` argument expect a `SyntaxColorGrammar` value. Every grammar `highlight-spans` supports except `Rust` has a code (0–17); `Rust` has no code yet, so C callers of this ABI can't select it. existing codes never change and new grammars are appended, so values compiled into older C callers stay valid.
+
+Limitations:
+
+- `SyntaxColorSpan` has no `background_attr_id` field, so the ambient diff background that
+  `highlight-spans` attaches to injected spans (see the `highlight-spans` README) is not exposed
+  over this ABI. Spans passed back in from C are treated as having no ambient background.
+
+For the zedit editor integration, see the separate [`tsbundler`](../tsbundler/README.md) crate.

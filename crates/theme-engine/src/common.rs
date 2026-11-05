@@ -3,7 +3,6 @@ use std::collections::BTreeMap;
 /// Normalizes a theme capture name for lookup.
 ///
 /// The normalization trims whitespace, removes an optional `@` prefix, and lowercases.
-
 #[must_use]
 pub fn normalize_capture_name(capture_name: &str) -> String {
     let trimmed = capture_name.trim();

@@ -10,10 +10,12 @@ extern "C" {
 #endif
 
 /*
- * zedit_ts.h — tsbundler C interface as defined by docs/zedit-spec.md.
+ * zedit_ts.h — C interface of the tsbundler library (built as "irisutils":
+ * libirisutils.so / libirisutils.dylib / irisutils.dll).
  *
- * Must be included after zedit.h (for zedit_char_t, zedit_attr_t, etc.) or
- * define ZEDIT_STANDALONE to get minimal type definitions for testing.
+ * Include after zedit.h, which defines ZEDIT_TYPES_DEFINED,
+ * ZEDIT_SYN_ELEMENT_DEFINED and ZEDIT_RGBNONE.  Without zedit.h this header
+ * supplies its own minimal definitions, which is enough for testing.
  */
 
 /* zedit_char_t: UCS-2 character (2 bytes on all platforms for this API).
@@ -28,15 +30,22 @@ typedef unsigned int   zedit_rgb_t;
 typedef unsigned int   zedit_vdu_attr;
 #endif
 
+#ifndef ZEDIT_RGBNONE
 #define ZEDIT_RGBNONE  0xFFFFFFFFU
+#endif
 
+#ifndef ZEDIT_VDU_ATTR_NORMAL
 #define ZEDIT_VDU_ATTR_NORMAL        0x00
 #define ZEDIT_VDU_ATTR_BOLD          0x01
 #define ZEDIT_VDU_ATTR_ITALIC        0x02
 #define ZEDIT_VDU_ATTR_UNDERLINE     0x04
 #define ZEDIT_VDU_ATTR_STRIKETHROUGH 0x08
+#endif
 
-/* One syntax-highlight element in the active theme. */
+/* One syntax-highlight element in the active theme.
+ * When included after zedit.h this struct is already defined. */
+#ifndef ZEDIT_SYN_ELEMENT_DEFINED
+#define ZEDIT_SYN_ELEMENT_DEFINED
 typedef struct {
     const char*   name;    /* Capture tag, e.g. "@keyword" */
     zedit_rgb_t   fg;      /* Foreground colour; ZEDIT_RGBNONE = use default */
@@ -44,6 +53,7 @@ typedef struct {
     zedit_vdu_attr attrs;  /* Combination of ZEDIT_VDU_ATTR_* flags */
     int           index;   /* The zedit_attr_t value emitted in attrs[] output */
 } zedit_syn_element;
+#endif
 
 /* tsbundler context and document handles */
 typedef struct tsbundler_ctx_s *tsbundler_ctx;
@@ -94,6 +104,26 @@ typedef const char *(*tsbundler_read_fn)(void *payload, uint32_t byte_offset,
  * own zedit_attr_t[nchars] buffer, or NULL to skip that line. */
 typedef zedit_attr_t *(*tsbundler_attrs_fn)(void *payload, uint32_t row,
                                              uint32_t nchars);
+/*
+ * A background-attribute callback.
+ *
+ * For each line, tsbundler calls bg_attrs(payload, row, nchars):
+ * if nchars > 0: the line has a background (ex: a diff "+" line).
+ * Returns a zedit_attr_t[nchars] buffer; tsbundler fills it.
+ *
+ * if nchars == 0: the line has no background. Release any buffer kept for
+ * this row, and return NULL.
+ *
+ * Values are element indices from tsbundler_theme_activate (0 = None);
+ * Use only the elements background when painting, and the character's own
+ * attrs entry still supplies fg and text attributes.
+ *
+ * To unregister, pass bg_attrs = NULL.
+ * Return TSBUNDLER_OK if successful, or TSBUNDLER_ERR_INTERNAL if doc is NULL.
+ */
+tsbundler_error tsbundler_doc_set_bg_attrs(tsbundler_doc doc,
+                                           tsbundler_attrs_fn bg_attrs,
+                                           void *bg_payload);
 
 /* Text encoding */
 typedef enum {
@@ -102,7 +132,9 @@ typedef enum {
     TSBUNDLER_ENC_UTF16BE = 2
 } tsbundler_encoding;
 
-/* Edit descriptor (all offsets in bytes; for UTF-16LE multiply char indices by 2) */
+/* Edit descriptor (all offsets in bytes; for UTF-16LE multiply char indices by 2).
+ * Currently reserved: tsbundler_doc_edit accepts edits but re-highlights the
+ * whole document, then reports only the lines whose attrs changed. */
 typedef struct {
     uint32_t start_byte;
     uint32_t old_end_byte;
@@ -145,6 +177,14 @@ ssize_t tsbundler_enum_themes(tsbundler_ctx ctx, tsbundler_theme_fn callback,
 ssize_t tsbundler_theme_activate(tsbundler_ctx ctx, const char *name,
                                    tsbundler_elem_fn callback, void *userdata);
 
+/* Resolve a UI role from the active theme.
+ * role_name: "default_fg", "default_bg", "statusline", "statusline_inactive",
+ *            "tab_active", "tab_inactive", "selection", "cursorline".
+ * Returns TSBUNDLER_OK on success, negative error code on failure. */
+int tsbundler_theme_resolve_ui(tsbundler_ctx ctx, const char *role_name,
+                               zedit_rgb_t *out_fg, zedit_rgb_t *out_bg,
+                               zedit_vdu_attr *out_attrs);
+
 /* === Document API (§8) === */
 
 tsbundler_doc tsbundler_doc_create(tsbundler_ctx ctx, const char *lang);
@@ -167,6 +207,20 @@ tsbundler_error tsbundler_doc_edit(tsbundler_doc doc,
                                     void *attrs_payload,
                                     tsbundler_range_fn on_changed,
                                     void *on_changed_payload);
+
+/* === Single-line ANSI rendering (IRIS command-line recall) === */
+
+/* Render chars [start, start+n) of an 8-bit line as ANSI-colored text into
+ * outbuf, using a shared highlighter and the "tokyonight-dark" theme.
+ * lang_tag: 1 = SQL, 2 = Python, 3 = MDX, anything else = ObjectScript.
+ * Returns 1 and sets *pansilen to the bytes written; if outcap is too small,
+ * returns 1 with *pansilen set to the size needed and writes nothing.
+ * Returns 0 on bad arguments or highlight failure (caller should fall back
+ * to plain text). */
+int recall_ansi_color_render_range(const unsigned char *srcbuf, int linelen,
+                                   int start, int n,
+                                   unsigned char *outbuf, int outcap,
+                                   int lang_tag, int *pansilen);
 
 #ifdef __cplusplus
 }

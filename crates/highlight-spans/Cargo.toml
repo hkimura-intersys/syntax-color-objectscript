@@ -7,9 +7,9 @@ description = "Tree-sitter ObjectScript highlight spans as attr/start/end tuples
 
 [dependencies]
 thiserror = "1"
-tree-sitter = ">=0.26.6"
-tree-sitter-highlight = ">=0.26.6"
-tree-sitter-language = "0.1.7"
+tree-sitter = "0.27.0"
+tree-sitter-highlight = "0.27.0"
+tree-sitter-language = "0.1.9"
 tree-sitter-md = "0.5.3"
 tree-sitter-objectscript-playground = "1.11.0"
 tree-sitter-objectscript-routine = "1.11.0"
@@ -24,6 +24,7 @@ tree-sitter-jsdoc = "0.25.0"
 tree-sitter-objectscript = "1.11.0"
 tree-sitter-regex = "0.25.0"
 tree-sitter-toml-ng = "0.7.0"
+tree-sitter-rust = "0.24.2"
 tree-sitter-diff = { git = "https://github.com/tree-sitter-grammars/tree-sitter-diff", tag = "v0.2.0" }
 
 [build-dependencies]

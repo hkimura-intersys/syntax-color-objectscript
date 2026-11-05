@@ -18,6 +18,7 @@ impl Grammar {
             "sql" | "tsql" | "plsql" | "mysql" | "postgres" => Some(Self::Sql),
             "python" | "py" => Some(Self::Python),
             "markdown" | "md" | "gfm" => Some(Self::Markdown),
+            "markdown_inline" | "markdown-inline" => Some(Self::MarkdownInline),
             "mdx" => Some(Self::Mdx),
             "xml" => Some(Self::Xml),
             "json" => Some(Self::Json),
@@ -30,6 +31,7 @@ impl Grammar {
             "regex" => Some(Self::Regex),
             "toml" => Some(Self::Toml),
             "diff" | "patch" | "udiff" => Some(Self::Diff),
+            "rs" | "rust" => Some(Self::Rust),
             _ => None,
         }
     }
@@ -43,6 +45,7 @@ impl Grammar {
             Self::Sql => "sql",
             Self::Python => "python",
             Self::Markdown => "markdown",
+            Self::MarkdownInline => "markdown_inline",
             Self::Mdx => "mdx",
             Self::Xml => "xml",
             Self::Json => "json",
@@ -55,6 +58,7 @@ impl Grammar {
             Self::Regex => "regex",
             Self::Toml => "toml",
             Self::Diff => "diff",
+            Self::Rust => "rust",
         }
     }
 

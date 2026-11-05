@@ -1,0 +1,97 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            platform: macos-arm64
+            lib: libirisutils.dylib
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            platform: macos-x86
+            lib: libirisutils.dylib
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x86
+            lib: libirisutils.so
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            platform: linux-arm64
+            lib: libirisutils.so
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: windows-x86
+            lib: irisutils.dll
+            implib: irisutils.dll.lib
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            platform: windows-arm64
+            lib: irisutils.dll
+            implib: irisutils.dll.lib
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build tsbundler
+        run: cargo build --release -p tsbundler --target ${{ matrix.target }}
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="irisutils-${GITHUB_REF_NAME}-${{ matrix.platform }}"
+          REL="target/${{ matrix.target }}/release"
+          mkdir -p "$OUT"
+          cp "$REL/${{ matrix.lib }}" "$OUT/"
+          if [ -n "${{ matrix.implib || '' }}" ]; then
+            cp "$REL/${{ matrix.implib }}" "$OUT/"
+          fi
+          cp include/zedit_ts.h LICENSE "$OUT/"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "$OUT.zip" "./$OUT/*"
+            echo "ASSET=$OUT.zip" >> "$GITHUB_ENV"
+          else
+            tar -czf "$OUT.tar.gz" -C "$OUT" .
+            echo "ASSET=$OUT.tar.gz" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: ${{ env.ASSET }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

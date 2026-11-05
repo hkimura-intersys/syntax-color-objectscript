@@ -39,10 +39,10 @@ fn parse_grammar(input: &str) -> Result<Grammar, String> {
 ///
 /// The resolved value is always at least `1`.
 fn parse_dimension(value: Option<&str>, env_key: &str, fallback: usize) -> usize {
-    if let Some(v) = value {
-        if let Ok(parsed) = v.parse::<usize>() {
-            return parsed.max(1);
-        }
+    if let Some(v) = value
+        && let Ok(parsed) = v.parse::<usize>()
+    {
+        return parsed.max(1);
     }
     env::var(env_key)
         .ok()

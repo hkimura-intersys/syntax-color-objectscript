@@ -346,4 +346,123 @@ info:
              punctuation.special won the byte outright"
         );
     }
+
+    /// Returns the capture name of the ambient background on the span whose
+    /// text is exactly `expected_text` under `capture_name`, if any.
+    fn background_for_text(
+        result: &HighlightResult,
+        source: &[u8],
+        capture_name: &str,
+        expected_text: &[u8],
+    ) -> Option<String> {
+        result
+            .spans
+            .iter()
+            .find(|span| {
+                result.attrs[span.attr_id].capture_name == capture_name
+                    && &source[span.start_byte..span.end_byte] == expected_text
+            })
+            .and_then(|span| span.background_attr_id)
+            .map(|id| result.attrs[id].capture_name.clone())
+    }
+
+    #[test]
+    /// Verifies `&sql()` inside a UDL class is injected as SQL.
+    fn udl_embedded_sql_is_highlighted_as_sql() {
+        let source = b"Class A.B\n{\nClassMethod M()\n{\n  &sql(SELECT Name FROM T)\n}\n}\n";
+        let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
+        let result = highlighter
+            .highlight(source, Grammar::ObjectScriptUdl)
+            .expect("failed to highlight");
+
+        assert!(
+            has_capture_for_text(&result, source, "keyword", b"SELECT"),
+            "expected SQL keyword inside UDL &sql()"
+        );
+    }
+
+    #[test]
+    /// Verifies HTML `<script>` and `<style>` bodies are injected as JavaScript and CSS.
+    fn html_script_and_style_are_injected() {
+        let source = b"<html><script>const x = 1;</script><style>body { color: red; }</style></html>\n";
+        let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
+        let result = highlighter
+            .highlight(source, Grammar::Html)
+            .expect("failed to highlight");
+
+        assert!(
+            has_capture_for_text(&result, source, "keyword", b"const"),
+            "expected JavaScript keyword inside <script>"
+        );
+        assert!(
+            has_capture_for_text(&result, source, "property", b"color"),
+            "expected CSS property inside <style>"
+        );
+    }
+
+    #[test]
+    /// Verifies JavaScript doc comments are injected as JSDoc.
+    fn javascript_jsdoc_comment_is_injected() {
+        let source = b"/** @param {number} x */\nfunction f(x) {}\n";
+        let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
+        let result = highlighter
+            .highlight(source, Grammar::JavaScript)
+            .expect("failed to highlight");
+
+        assert!(
+            has_capture_for_text(&result, source, "keyword", b"@param"),
+            "expected JSDoc tag inside a /** */ comment"
+        );
+    }
+
+    #[test]
+    /// Verifies Markdown fenced code and inline content are both injected.
+    fn markdown_fenced_code_and_inline_are_injected() {
+        let source = b"some **bold** text\n\n```python\ndef f():\n    return 1\n```\n";
+        let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
+        let result = highlighter
+            .highlight(source, Grammar::Markdown)
+            .expect("failed to highlight");
+
+        assert!(
+            has_capture_for_text(&result, source, "text.strong", b"bold"),
+            "expected inline Markdown emphasis"
+        );
+        assert!(
+            has_capture_for_text(&result, source, "keyword", b"def"),
+            "expected Python keyword inside a ```python fence"
+        );
+    }
+
+    #[test]
+    /// Verifies injections nest: Markdown -> HTML block -> JavaScript.
+    fn markdown_html_block_script_is_injected_two_levels_deep() {
+        let source = b"# T\n\n<div>\n<script>const x = 1;</script>\n</div>\n";
+        let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
+        let result = highlighter
+            .highlight(source, Grammar::Markdown)
+            .expect("failed to highlight");
+
+        assert!(
+            has_capture_for_text(&result, source, "keyword", b"const"),
+            "expected JavaScript keyword inside a <script> in a Markdown HTML block"
+        );
+    }
+
+    #[test]
+    /// Verifies a nested injection keeps the outermost ambient background:
+    /// diff -> Markdown -> inline Markdown still sits on `diff.plus`.
+    fn diff_background_survives_nested_markdown_inline_injection() {
+        let source = b"diff --git a/x.md b/x.md\nindex 1234567..89abcde 100644\n--- a/x.md\n+++ b/x.md\n@@ -1,2 +1,2 @@\n-old\n+some **bold** text\n";
+        let mut highlighter = SpanHighlighter::new().expect("failed to build highlighter");
+        let result = highlighter
+            .highlight(source, Grammar::Diff)
+            .expect("failed to highlight diff");
+
+        assert_eq!(
+            background_for_text(&result, source, "text.strong", b"bold").as_deref(),
+            Some("diff.plus"),
+            "expected inline emphasis inside a + line to carry the diff.plus background"
+        );
+    }
 }

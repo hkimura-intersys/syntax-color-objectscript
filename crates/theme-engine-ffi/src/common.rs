@@ -8,7 +8,7 @@ use render_ansi::common::{
     osc_reset_default_colors, osc_reset_default_foreground, osc_set_default_colors, render_ansi,
     render_ansi_lines, resolve_styled_spans, resolve_styled_spans_for_source,
 };
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
 use std::ptr;
 use theme_engine::common::load_theme;
 use theme_engine::theme_structures::{Rgb, Style, Theme};
@@ -87,10 +87,14 @@ unsafe fn parse_utf8_bytes<'a>(data: *const u8, len: usize) -> Result<&'a str, i
     std::str::from_utf8(bytes).map_err(|_| SYNTAX_COLOR_FFI_ERR_UTF8)
 }
 
-unsafe fn parse_ffi_string<'a>(value: &'a SyntaxColorString) -> Result<&'a str, i32> {
+unsafe fn parse_ffi_string(value: &SyntaxColorString) -> Result<&str, i32> {
     unsafe { parse_utf8_bytes(value.data.cast_const(), value.len) }
 }
 
+/// Maps a C `SyntaxColorGrammar` value to a [`Grammar`].
+///
+/// Codes are part of the C ABI: existing values must never be renumbered, and
+/// new grammars are appended (see `include/theme_engine_ffi.h`).
 fn parse_grammar(grammar: i32) -> Result<Grammar, i32> {
     match grammar {
         0 => Ok(Grammar::ObjectScript),
@@ -102,6 +106,16 @@ fn parse_grammar(grammar: i32) -> Result<Grammar, i32> {
         6 => Ok(Grammar::Xml),
         7 => Ok(Grammar::Json),
         8 => Ok(Grammar::Yaml),
+        9 => Ok(Grammar::Css),
+        10 => Ok(Grammar::Html),
+        11 => Ok(Grammar::JavaScript),
+        12 => Ok(Grammar::JsDoc),
+        13 => Ok(Grammar::ObjectScriptUdl),
+        14 => Ok(Grammar::Regex),
+        15 => Ok(Grammar::Toml),
+        16 => Ok(Grammar::Diff),
+        17 => Ok(Grammar::MarkdownInline),
+        18 => Ok(Grammar::Rust),
         _ => Err(SYNTAX_COLOR_FFI_ERR_INVALID_ARGUMENT),
     }
 }
@@ -359,7 +373,14 @@ fn write_string_array_output(out: *mut SyntaxColorStringArray, value: Vec<String
 }
 
 /// Frees a byte buffer previously returned by this library.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `value` must be null or point to a `SyntaxColorString` that is either empty (zeroed) or was
+///   filled in by this library and not modified since.
+/// - The buffer must not be read after this call. The struct is reset to empty, so freeing it again
+///   is a no-op.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_string_free(value: *mut SyntaxColorString) {
     if value.is_null() {
         return;
@@ -372,7 +393,15 @@ pub unsafe extern "C" fn syntax_color_string_free(value: *mut SyntaxColorString)
 }
 
 /// Frees an array of byte buffers previously returned by this library.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `values` must be null or point to a `SyntaxColorStringArray` that is either empty (zeroed) or
+///   was filled in by this library, with neither the array nor its strings modified or freed
+///   individually since.
+/// - None of the strings may be read after this call. The struct is reset to empty, so freeing it
+///   again is a no-op.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_string_array_free(values: *mut SyntaxColorStringArray) {
     if values.is_null() {
         return;
@@ -393,7 +422,14 @@ pub unsafe extern "C" fn syntax_color_string_array_free(values: *mut SyntaxColor
 }
 
 /// Frees a highlight result previously returned by this library.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `result` must be null or point to a `SyntaxColorHighlightResult` that is either empty (zeroed)
+///   or was filled in by `syntax_color_highlighter_highlight` and not modified since.
+/// - The attrs, spans and capture-name strings must not be read after this call. The struct is
+///   reset to empty, so freeing it again is a no-op.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_highlight_result_free(
     result: *mut SyntaxColorHighlightResult,
 ) {
@@ -418,7 +454,14 @@ pub unsafe extern "C" fn syntax_color_highlight_result_free(
 }
 
 /// Frees a styled span buffer previously returned by this library.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `spans` must be null or point to a `SyntaxColorStyledSpanBuffer` that is either empty (zeroed)
+///   or was filled in by `syntax_color_resolve_styled_spans` and not modified since.
+/// - The spans must not be read after this call. The struct is reset to empty, so freeing it again
+///   is a no-op.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_styled_spans_free(spans: *mut SyntaxColorStyledSpanBuffer) {
     if spans.is_null() {
         return;
@@ -431,7 +474,14 @@ pub unsafe extern "C" fn syntax_color_styled_spans_free(spans: *mut SyntaxColorS
 }
 
 /// Frees a theme handle previously returned by this library.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `theme` must be null or a handle returned by `theme_engine_theme_load_builtin` or
+///   `theme_engine_theme_load_json` that has not already been freed.
+/// - The handle must not be used after this call, including by calls still running on another
+///   thread.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn theme_engine_theme_free(theme: *mut ThemeEngineTheme) {
     if theme.is_null() {
         return;
@@ -441,7 +491,14 @@ pub unsafe extern "C" fn theme_engine_theme_free(theme: *mut ThemeEngineTheme) {
 }
 
 /// Loads a built-in theme by name (for example `"tokyonight-dark"`).
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `name` must be null or point to a NUL-terminated string that stays valid for the duration of
+///   the call.
+/// - `out_theme` must be null or valid for writing one `ThemeEngineTheme *`. On success it receives
+///   a new handle that must be released with `theme_engine_theme_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn theme_engine_theme_load_builtin(
     name: *const c_char,
     out_theme: *mut *mut ThemeEngineTheme,
@@ -467,7 +524,14 @@ pub unsafe extern "C" fn theme_engine_theme_load_builtin(
 }
 
 /// Loads a theme from a JSON string.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `json` must be null or point to a NUL-terminated string that stays valid for the duration of
+///   the call.
+/// - `out_theme` must be null or valid for writing one `ThemeEngineTheme *`. On success it receives
+///   a new handle that must be released with `theme_engine_theme_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn theme_engine_theme_load_json(
     json: *const c_char,
     out_theme: *mut *mut ThemeEngineTheme,
@@ -493,7 +557,15 @@ pub unsafe extern "C" fn theme_engine_theme_load_json(
 }
 
 /// Resolves a syntax capture style (for example `"@keyword"`).
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `theme` must be null or a handle returned by `theme_engine_theme_load_builtin` or
+///   `theme_engine_theme_load_json` that has not been passed to `theme_engine_theme_free`.
+/// - `capture_name` must be null or point to a NUL-terminated string that stays valid for the
+///   duration of the call.
+/// - `out_style` must be null or valid for writing one `ThemeEngineStyle`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn theme_engine_theme_resolve_capture(
     theme: *const ThemeEngineTheme,
     capture_name: *const c_char,
@@ -522,7 +594,15 @@ pub unsafe extern "C" fn theme_engine_theme_resolve_capture(
 }
 
 /// Resolves a UI role style (for example `"statusline"` or `"tab_active"`).
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `theme` must be null or a handle returned by `theme_engine_theme_load_builtin` or
+///   `theme_engine_theme_load_json` that has not been passed to `theme_engine_theme_free`.
+/// - `role_name` must be null or point to a NUL-terminated string that stays valid for the duration
+///   of the call.
+/// - `out_style` must be null or valid for writing one `ThemeEngineStyle`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn theme_engine_theme_resolve_ui(
     theme: *const ThemeEngineTheme,
     role_name: *const c_char,
@@ -551,7 +631,16 @@ pub unsafe extern "C" fn theme_engine_theme_resolve_ui(
 }
 
 /// Returns default terminal foreground/background colors from the theme.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `theme` must be null or a handle returned by `theme_engine_theme_load_builtin` or
+///   `theme_engine_theme_load_json` that has not been passed to `theme_engine_theme_free`.
+/// - `out_has_fg` and `out_has_bg` must each be null or valid for writing one `uint8_t`.
+/// - `out_fg` and `out_bg` must each be null or valid for writing one `ThemeEngineRgb`. Either may
+///   be null when the theme has no such color; if the color exists and its pointer is null, the
+///   call returns `SYNTAX_COLOR_FFI_ERR_NULL` after writing the `out_has_*` flags.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn theme_engine_theme_default_terminal_colors(
     theme: *const ThemeEngineTheme,
     out_has_fg: *mut u8,
@@ -594,7 +683,12 @@ pub unsafe extern "C" fn theme_engine_theme_default_terminal_colors(
 }
 
 /// Creates a reusable Tree-sitter highlighter handle.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `out_highlighter` must be null or valid for writing one `SyntaxColorHighlighter *`. On success
+///   it receives a new handle that must be released with `syntax_color_highlighter_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_highlighter_new(
     out_highlighter: *mut *mut SyntaxColorHighlighter,
 ) -> i32 {
@@ -614,7 +708,14 @@ pub unsafe extern "C" fn syntax_color_highlighter_new(
 }
 
 /// Frees a highlighter handle previously returned by this library.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `highlighter` must be null or a handle returned by `syntax_color_highlighter_new` that has not
+///   already been freed.
+/// - The handle must not be used after this call, including by calls still running on another
+///   thread.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_highlighter_free(highlighter: *mut SyntaxColorHighlighter) {
     if highlighter.is_null() {
         return;
@@ -624,7 +725,17 @@ pub unsafe extern "C" fn syntax_color_highlighter_free(highlighter: *mut SyntaxC
 }
 
 /// Highlights a source buffer into attribute and span arrays.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `highlighter` must be null or a handle returned by `syntax_color_highlighter_new` that has not
+///   been freed, and must not be in use by another thread during the call.
+/// - `source` must be null or point to at least `source_len` readable bytes (null is accepted only
+///   when `source_len` is 0).
+/// - `out_result` must be null or valid for writing one `SyntaxColorHighlightResult`. Any previous
+///   contents are overwritten without being freed; release the result with
+///   `syntax_color_highlight_result_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_highlighter_highlight(
     highlighter: *mut SyntaxColorHighlighter,
     source: *const u8,
@@ -658,7 +769,19 @@ pub unsafe extern "C" fn syntax_color_highlighter_highlight(
 }
 
 /// Resolves highlight output into render-ready styled spans.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `theme` must be null or a handle returned by `theme_engine_theme_load_builtin` or
+///   `theme_engine_theme_load_json` that has not been passed to `theme_engine_theme_free`.
+/// - `highlight` must be null or point to a `SyntaxColorHighlightResult` whose `attrs` and `spans`
+///   point to at least `attr_count` and `span_count` readable elements (each may be null only when
+///   its count is 0), and whose capture-name strings point to at least `len` readable bytes. A
+///   result filled in by `syntax_color_highlighter_highlight` and not yet freed satisfies this.
+/// - `out_spans` must be null or valid for writing one `SyntaxColorStyledSpanBuffer`. Any previous
+///   contents are overwritten without being freed; release the result with
+///   `syntax_color_styled_spans_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_resolve_styled_spans(
     theme: *const ThemeEngineTheme,
     source_len: usize,
@@ -698,7 +821,16 @@ pub unsafe extern "C" fn syntax_color_resolve_styled_spans(
 }
 
 /// Renders styled spans into a single ANSI/VT byte buffer.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `source` must be null or point to at least `source_len` readable bytes (null is accepted only
+///   when `source_len` is 0).
+/// - `spans` must be null or point to at least `span_count` readable `SyntaxColorStyledSpan` values
+///   (null is accepted only when `span_count` is 0).
+/// - `out_ansi` must be null or valid for writing one `SyntaxColorString`. Any previous contents
+///   are overwritten without being freed; release the result with `syntax_color_string_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_render_ansi(
     source: *const u8,
     source_len: usize,
@@ -737,7 +869,17 @@ pub unsafe extern "C" fn syntax_color_render_ansi(
 }
 
 /// Renders styled spans into line-split ANSI/VT byte buffers.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `source` must be null or point to at least `source_len` readable bytes (null is accepted only
+///   when `source_len` is 0).
+/// - `spans` must be null or point to at least `span_count` readable `SyntaxColorStyledSpan` values
+///   (null is accepted only when `span_count` is 0).
+/// - `out_lines` must be null or valid for writing one `SyntaxColorStringArray`. Any previous
+///   contents are overwritten without being freed; release the result with
+///   `syntax_color_string_array_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_render_ansi_lines(
     source: *const u8,
     source_len: usize,
@@ -778,7 +920,19 @@ pub unsafe extern "C" fn syntax_color_render_ansi_lines(
 /// Highlights and renders a source buffer into ANSI/VT in one call.
 ///
 /// Pass `NULL` for `highlighter` to use a temporary one-shot highlighter.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `highlighter` must be null (a temporary highlighter is used) or a handle returned by
+///   `syntax_color_highlighter_new` that has not been freed, and must not be in use by another
+///   thread during the call.
+/// - `theme` must be null or a handle returned by `theme_engine_theme_load_builtin` or
+///   `theme_engine_theme_load_json` that has not been passed to `theme_engine_theme_free`.
+/// - `source` must be null or point to at least `source_len` readable bytes (null is accepted only
+///   when `source_len` is 0).
+/// - `out_ansi` must be null or valid for writing one `SyntaxColorString`. Any previous contents
+///   are overwritten without being freed; release the result with `syntax_color_string_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_highlight_to_ansi(
     highlighter: *mut SyntaxColorHighlighter,
     theme: *const ThemeEngineTheme,
@@ -832,7 +986,20 @@ pub unsafe extern "C" fn syntax_color_highlight_to_ansi(
 /// Highlights and renders a source buffer into line-split ANSI/VT output.
 ///
 /// Pass `NULL` for `highlighter` to use a temporary one-shot highlighter.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `highlighter` must be null (a temporary highlighter is used) or a handle returned by
+///   `syntax_color_highlighter_new` that has not been freed, and must not be in use by another
+///   thread during the call.
+/// - `theme` must be null or a handle returned by `theme_engine_theme_load_builtin` or
+///   `theme_engine_theme_load_json` that has not been passed to `theme_engine_theme_free`.
+/// - `source` must be null or point to at least `source_len` readable bytes (null is accepted only
+///   when `source_len` is 0).
+/// - `out_lines` must be null or valid for writing one `SyntaxColorStringArray`. Any previous
+///   contents are overwritten without being freed; release the result with
+///   `syntax_color_string_array_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_highlight_to_ansi_lines(
     highlighter: *mut SyntaxColorHighlighter,
     theme: *const ThemeEngineTheme,
@@ -887,7 +1054,14 @@ pub unsafe extern "C" fn syntax_color_highlight_to_ansi_lines(
 }
 
 /// Builds OSC 10/11 sequences from the theme's default terminal colors.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `theme` must be null or a handle returned by `theme_engine_theme_load_builtin` or
+///   `theme_engine_theme_load_json` that has not been passed to `theme_engine_theme_free`.
+/// - `out_osc` must be null or valid for writing one `SyntaxColorString`. Any previous contents are
+///   overwritten without being freed; release the result with `syntax_color_string_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_osc_set_default_colors(
     theme: *const ThemeEngineTheme,
     out_osc: *mut SyntaxColorString,
@@ -901,7 +1075,12 @@ pub unsafe extern "C" fn syntax_color_osc_set_default_colors(
 }
 
 /// Returns OSC 110 to reset terminal default foreground color.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `out_osc` must be null or valid for writing one `SyntaxColorString`. Any previous contents are
+///   overwritten without being freed; release the result with `syntax_color_string_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_osc_reset_default_foreground(
     out_osc: *mut SyntaxColorString,
 ) -> i32 {
@@ -909,7 +1088,12 @@ pub unsafe extern "C" fn syntax_color_osc_reset_default_foreground(
 }
 
 /// Returns OSC 111 to reset terminal default background color.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `out_osc` must be null or valid for writing one `SyntaxColorString`. Any previous contents are
+///   overwritten without being freed; release the result with `syntax_color_string_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_osc_reset_default_background(
     out_osc: *mut SyntaxColorString,
 ) -> i32 {
@@ -917,7 +1101,12 @@ pub unsafe extern "C" fn syntax_color_osc_reset_default_background(
 }
 
 /// Returns OSC 110 + 111 to reset terminal default foreground/background colors.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `out_osc` must be null or valid for writing one `SyntaxColorString`. Any previous contents are
+///   overwritten without being freed; release the result with `syntax_color_string_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_osc_reset_default_colors(
     out_osc: *mut SyntaxColorString,
 ) -> i32 {
@@ -925,7 +1114,13 @@ pub unsafe extern "C" fn syntax_color_osc_reset_default_colors(
 }
 
 /// Creates a multi-line incremental VT patch renderer.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `out_renderer` must be null or valid for writing one `SyntaxColorIncrementalRenderer *`. On
+///   success it receives a new handle that must be released with
+///   `syntax_color_incremental_renderer_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_incremental_renderer_new(
     width: usize,
     height: usize,
@@ -943,7 +1138,14 @@ pub unsafe extern "C" fn syntax_color_incremental_renderer_new(
 }
 
 /// Frees an incremental renderer handle previously returned by this library.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_incremental_renderer_new` that
+///   has not already been freed.
+/// - The handle must not be used after this call, including by calls still running on another
+///   thread.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_incremental_renderer_free(
     renderer: *mut SyntaxColorIncrementalRenderer,
 ) {
@@ -955,7 +1157,12 @@ pub unsafe extern "C" fn syntax_color_incremental_renderer_free(
 }
 
 /// Resizes the incremental renderer viewport.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_incremental_renderer_new` that
+///   has not been freed, and must not be in use by another thread during the call.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_incremental_renderer_resize(
     renderer: *mut SyntaxColorIncrementalRenderer,
     width: usize,
@@ -971,7 +1178,12 @@ pub unsafe extern "C" fn syntax_color_incremental_renderer_resize(
 }
 
 /// Clears cached frame state from the incremental renderer.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_incremental_renderer_new` that
+///   has not been freed, and must not be in use by another thread during the call.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_incremental_renderer_clear_state(
     renderer: *mut SyntaxColorIncrementalRenderer,
 ) -> i32 {
@@ -985,7 +1197,12 @@ pub unsafe extern "C" fn syntax_color_incremental_renderer_clear_state(
 }
 
 /// Sets the terminal origin used by the incremental renderer.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_incremental_renderer_new` that
+///   has not been freed, and must not be in use by another thread during the call.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_incremental_renderer_set_origin(
     renderer: *mut SyntaxColorIncrementalRenderer,
     row: usize,
@@ -1001,7 +1218,12 @@ pub unsafe extern "C" fn syntax_color_incremental_renderer_set_origin(
 }
 
 /// Sets the color mode used by the incremental renderer.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_incremental_renderer_new` that
+///   has not been freed, and must not be in use by another thread during the call.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_incremental_renderer_set_color_mode(
     renderer: *mut SyntaxColorIncrementalRenderer,
     color_mode: i32,
@@ -1020,7 +1242,12 @@ pub unsafe extern "C" fn syntax_color_incremental_renderer_set_color_mode(
 }
 
 /// Sets whether the incremental renderer preserves terminal background color.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_incremental_renderer_new` that
+///   has not been freed, and must not be in use by another thread during the call.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_incremental_renderer_set_preserve_terminal_background(
     renderer: *mut SyntaxColorIncrementalRenderer,
     preserve_terminal_background: u8,
@@ -1035,7 +1262,18 @@ pub unsafe extern "C" fn syntax_color_incremental_renderer_set_preserve_terminal
 }
 
 /// Renders a VT patch from styled spans using the incremental renderer.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_incremental_renderer_new` that
+///   has not been freed, and must not be in use by another thread during the call.
+/// - `source` must be null or point to at least `source_len` readable bytes (null is accepted only
+///   when `source_len` is 0).
+/// - `spans` must be null or point to at least `span_count` readable `SyntaxColorStyledSpan` values
+///   (null is accepted only when `span_count` is 0).
+/// - `out_patch` must be null or valid for writing one `SyntaxColorString`. Any previous contents
+///   are overwritten without being freed; release the result with `syntax_color_string_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_incremental_renderer_render_patch(
     renderer: *mut SyntaxColorIncrementalRenderer,
     source: *const u8,
@@ -1071,7 +1309,21 @@ pub unsafe extern "C" fn syntax_color_incremental_renderer_render_patch(
 /// Highlights and renders a VT patch using the incremental renderer.
 ///
 /// Pass `NULL` for `highlighter` to use a temporary one-shot highlighter.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_incremental_renderer_new` that
+///   has not been freed, and must not be in use by another thread during the call.
+/// - `highlighter` must be null (a temporary highlighter is used) or a handle returned by
+///   `syntax_color_highlighter_new` that has not been freed, and must not be in use by another
+///   thread during the call.
+/// - `theme` must be null or a handle returned by `theme_engine_theme_load_builtin` or
+///   `theme_engine_theme_load_json` that has not been passed to `theme_engine_theme_free`.
+/// - `source` must be null or point to at least `source_len` readable bytes (null is accepted only
+///   when `source_len` is 0).
+/// - `out_patch` must be null or valid for writing one `SyntaxColorString`. Any previous contents
+///   are overwritten without being freed; release the result with `syntax_color_string_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_incremental_renderer_highlight_to_patch(
     renderer: *mut SyntaxColorIncrementalRenderer,
     highlighter: *mut SyntaxColorHighlighter,
@@ -1117,7 +1369,13 @@ pub unsafe extern "C" fn syntax_color_incremental_renderer_highlight_to_patch(
 }
 
 /// Creates a single-line stream-safe VT patch renderer.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `out_renderer` must be null or valid for writing one `SyntaxColorStreamLineRenderer *`. On
+///   success it receives a new handle that must be released with
+///   `syntax_color_stream_line_renderer_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_stream_line_renderer_new(
     out_renderer: *mut *mut SyntaxColorStreamLineRenderer,
 ) -> i32 {
@@ -1133,7 +1391,14 @@ pub unsafe extern "C" fn syntax_color_stream_line_renderer_new(
 }
 
 /// Frees a stream-line renderer handle previously returned by this library.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_stream_line_renderer_new` that
+///   has not already been freed.
+/// - The handle must not be used after this call, including by calls still running on another
+///   thread.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_stream_line_renderer_free(
     renderer: *mut SyntaxColorStreamLineRenderer,
 ) {
@@ -1145,7 +1410,12 @@ pub unsafe extern "C" fn syntax_color_stream_line_renderer_free(
 }
 
 /// Clears cached line state from the stream-line renderer.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_stream_line_renderer_new` that
+///   has not been freed, and must not be in use by another thread during the call.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_stream_line_renderer_clear_state(
     renderer: *mut SyntaxColorStreamLineRenderer,
 ) -> i32 {
@@ -1159,7 +1429,12 @@ pub unsafe extern "C" fn syntax_color_stream_line_renderer_clear_state(
 }
 
 /// Sets the color mode used by the stream-line renderer.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_stream_line_renderer_new` that
+///   has not been freed, and must not be in use by another thread during the call.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_stream_line_renderer_set_color_mode(
     renderer: *mut SyntaxColorStreamLineRenderer,
     color_mode: i32,
@@ -1178,7 +1453,12 @@ pub unsafe extern "C" fn syntax_color_stream_line_renderer_set_color_mode(
 }
 
 /// Sets whether the stream-line renderer preserves terminal background color.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_stream_line_renderer_new` that
+///   has not been freed, and must not be in use by another thread during the call.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_stream_line_renderer_set_preserve_terminal_background(
     renderer: *mut SyntaxColorStreamLineRenderer,
     preserve_terminal_background: u8,
@@ -1193,7 +1473,18 @@ pub unsafe extern "C" fn syntax_color_stream_line_renderer_set_preserve_terminal
 }
 
 /// Renders a single-line VT patch from styled spans using the stream-line renderer.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_stream_line_renderer_new` that
+///   has not been freed, and must not be in use by another thread during the call.
+/// - `source` must be null or point to at least `source_len` readable bytes (null is accepted only
+///   when `source_len` is 0).
+/// - `spans` must be null or point to at least `span_count` readable `SyntaxColorStyledSpan` values
+///   (null is accepted only when `span_count` is 0).
+/// - `out_patch` must be null or valid for writing one `SyntaxColorString`. Any previous contents
+///   are overwritten without being freed; release the result with `syntax_color_string_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_stream_line_renderer_render_line_patch(
     renderer: *mut SyntaxColorStreamLineRenderer,
     source: *const u8,
@@ -1229,7 +1520,21 @@ pub unsafe extern "C" fn syntax_color_stream_line_renderer_render_line_patch(
 /// Highlights and renders a single-line VT patch using the stream-line renderer.
 ///
 /// Pass `NULL` for `highlighter` to use a temporary one-shot highlighter.
-#[no_mangle]
+///
+/// # Safety
+///
+/// - `renderer` must be null or a handle returned by `syntax_color_stream_line_renderer_new` that
+///   has not been freed, and must not be in use by another thread during the call.
+/// - `highlighter` must be null (a temporary highlighter is used) or a handle returned by
+///   `syntax_color_highlighter_new` that has not been freed, and must not be in use by another
+///   thread during the call.
+/// - `theme` must be null or a handle returned by `theme_engine_theme_load_builtin` or
+///   `theme_engine_theme_load_json` that has not been passed to `theme_engine_theme_free`.
+/// - `source` must be null or point to at least `source_len` readable bytes (null is accepted only
+///   when `source_len` is 0).
+/// - `out_patch` must be null or valid for writing one `SyntaxColorString`. Any previous contents
+///   are overwritten without being freed; release the result with `syntax_color_string_free`.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn syntax_color_stream_line_renderer_highlight_line_to_patch(
     renderer: *mut SyntaxColorStreamLineRenderer,
     highlighter: *mut SyntaxColorHighlighter,

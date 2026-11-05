@@ -4,15 +4,13 @@
 
 ## What It Provides
 
-- End-to-end helpers:
-  - `highlight_to_ansi(...) -> String`
-  - `highlight_to_ansi_with_mode(..., ColorMode::{TrueColor|Ansi256|Ansi16}) -> String`
-  - `highlight_to_ansi_with_mode_and_background(..., color_mode, preserve_terminal_background) -> String`
-  - `highlight_lines_to_ansi_lines(...) -> Vec<String>`
-  - `highlight_lines_to_ansi_lines_with_mode(..., ColorMode::{TrueColor|Ansi256|Ansi16}) -> Vec<String>`
-  - `highlight_lines_to_ansi_lines_with_mode_and_background(..., color_mode, preserve_terminal_background) -> Vec<String>`
+- End-to-end helpers (in `render_ansi::common`):
+  - `highlight_to_ansi(source, grammar, &theme, highlighter, color_mode, preserve_terminal_background) -> String`
+  - `highlight_lines_to_ansi_lines(lines, grammar, &theme, highlighter, color_mode, preserve_terminal_background) -> Vec<String>`
+  - The last three arguments are optional: pass `None` for a temporary highlighter, truecolor output, and themed backgrounds.
   - High-level highlight helpers treat `normal` as a base layer and fill uncovered ranges with that style.
-  - Background behavior is configurable; default preserves terminal background (`preserve_terminal_background = true`).
+  - Spans with a `background_attr_id` (for example injected code inside a diff hunk) are layered as `normal` -> ambient background -> token style; only the ambient attribute's `bg` is used.
+  - Background behavior is configurable; by default theme backgrounds are drawn (`preserve_terminal_background = false`).
 - Incremental patching:
   - `IncrementalRenderer::new(width, height)`
   - `IncrementalRenderer::set_origin(row, col)`
@@ -25,29 +23,31 @@
   - `StreamLineRenderer::set_preserve_terminal_background(bool)`
   - `StreamLineRenderer::render_line_patch(source, spans) -> String`
   - `StreamLineRenderer::highlight_line_to_patch(...) -> String`
-- Low-level render helpers:
+- Low-level render helpers (in `render_ansi::common`):
   - `resolve_styled_spans(...)`
   - `render_ansi(...)`
   - `render_ansi_lines(...)`
-- Terminal default-color helpers (OSC):
-  - `osc_set_default_colors_from_theme(&theme) -> String` (OSC 10/11)
-  - `osc_reset_default_colors() -> &'static str` (OSC 110/111)
+- Terminal default-color helpers (OSC, in `render_ansi::common`):
+  - `osc_set_default_colors(theme) -> String` (OSC 10/11; takes the `Theme` by value)
+  - `osc_reset_default_foreground()` / `osc_reset_default_background() -> &'static str` (OSC 110/111)
 
 ## Quick Example
 
 ```rust
-use highlight_spans::Grammar;
-use render_ansi::{highlight_to_ansi_with_mode_and_background, ColorMode};
-use theme_engine::load_theme;
+use highlight_spans::highlight_structures::Grammar;
+use render_ansi::ansi_structures::ColorMode;
+use render_ansi::common::highlight_to_ansi;
+use theme_engine::common::load_theme;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let theme = load_theme("tokyonight-dark")?;
-    let out = highlight_to_ansi_with_mode_and_background(
+    let out = highlight_to_ansi(
         b"SELECT 42",
         Grammar::Sql,
         &theme,
-        ColorMode::Ansi256,
-        false, // use theme background colors
+        None,                     // use a temporary highlighter
+        Some(ColorMode::Ansi256),
+        Some(false),              // use theme background colors
     )?;
     println!("{out}");
     Ok(())
@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - `StreamLineRenderer` uses relative single-line patching (`CUB` + overwrite + optional `EL`) and is useful when terminal width is unknown.
 - Tab cells are interpreted with an 8-column tab stop in the incremental path.
 - Default ANSI color mode is truecolor (`38;2;r;g;b`). Use `Ansi256` or `Ansi16` for constrained terminals.
-- Default background mode preserves terminal background; disable it to emit themed background colors.
+- By default themed background colors are emitted; enable `preserve_terminal_background` to keep the terminal's own background.
 - For terminals that support OSC 10/11, you can set session default fg/bg from theme `default_fg`/`default_bg` (fallback `normal`) at session start and reset at session end.
 - In `vt_patch_bridge` multiline fallback mode (no `--origin-row`), the bridge clears/repositions using logical `\n` line count from `--prev` when provided.
 - If you have your own paint engine (for example native C), use `highlight-spans` + `theme-engine` directly and skip ANSI rendering.
@@ -81,7 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 If your editable text starts after a prompt (or inside a viewport sub-region), set an origin:
 
 ```rust
-let mut renderer = render_ansi::IncrementalRenderer::new(120, 40);
+let mut renderer = render_ansi::ansi_structures::IncrementalRenderer::new(120, 40);
 renderer.set_origin(4, 7); // row 4, col 7 (1-based)
 ```
 

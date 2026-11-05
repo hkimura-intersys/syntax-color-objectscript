@@ -17,6 +17,8 @@
   - `tokyonight-storm`
   - `tokyonight-moon`
   - `tokyonight-day`
+  - `tokyonight-dark`
+  - `tokyonight-light`
   - `catppuccin-latte`
   - `catppuccin-frappe`
   - `catppuccin-macchiato`
@@ -25,13 +27,13 @@
   - `aviel`
   - `solarized-dark`
   - `solarized-light`
-  - aliases: `tokyonight-dark` -> `tokyonight-night`, `tokyonight-light` -> `tokyonight-day`, `tokyonight` -> `tokyonight-moon`, `studio-classic` -> `studio-default`, `studio-aviel`/`aviel-studio` -> `aviel`
+  - aliases: `tokyo-night` -> `tokyonight-dark`, `tokyo-day` -> `tokyonight-light`, `tokyonight` -> `tokyonight-moon`, `studio-classic` -> `studio-default`, `studio-aviel`/`aviel-studio` -> `aviel`
 - Theme loading from JSON and TOML strings.
 
 ## Quick Example
 
 ```rust
-use theme_engine::load_theme;
+use theme_engine::common::load_theme;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let theme = load_theme("tokyonight-dark")?;
@@ -59,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Custom Theme Example
 
 ```rust
-use theme_engine::Theme;
+use theme_engine::theme_structures::Theme;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let theme = Theme::from_json_str(r#"
