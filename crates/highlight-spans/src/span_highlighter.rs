@@ -4,14 +4,17 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::env;
 use std::time::{Duration, Instant};
-use tree_sitter::{Language, Parser, Query, QueryCursor, QueryPredicateArg, StreamingIterator};
+use tree_sitter::{
+    Language, Parser, Query, QueryCursor, QueryPredicateArg, StreamingIterator, Tree,
+};
 
-const ALL_GRAMMARS: [Grammar; 17] = [
+const ALL_GRAMMARS: [Grammar; 19] = [
     Grammar::ObjectScript,
     Grammar::ObjectScriptRoutine,
     Grammar::Sql,
     Grammar::Python,
     Grammar::Markdown,
+    Grammar::MarkdownInline,
     Grammar::Mdx,
     Grammar::Xml,
     Grammar::Json,
@@ -24,6 +27,7 @@ const ALL_GRAMMARS: [Grammar; 17] = [
     Grammar::Regex,
     Grammar::Toml,
     Grammar::Diff,
+    Grammar::Rust,
 ];
 
 const HIGHLIGHT_TIMING_ENV_VAR: &str = "SYNTAX_COLOR_LOG_HIGHLIGHT_TIMINGS";
@@ -68,6 +72,11 @@ fn grammar_source(grammar: Grammar) -> GrammarSource {
             language: MARKDOWN_LANGUAGE.into(),
             highlights_query: MARKDOWN_HIGHLIGHTS_QUERY,
             injections_query: MARKDOWN_INJECTIONS_QUERY,
+        },
+        Grammar::MarkdownInline => GrammarSource {
+            language: MARKDOWN_INLINE_LANGUAGE.into(),
+            highlights_query: MARKDOWN_INLINE_HIGHLIGHTS_QUERY,
+            injections_query: MARKDOWN_INLINE_INJECTIONS_QUERY,
         },
         // InterSystems MDX is OLAP query syntax; use SQL highlighting as a temporary fallback.
         Grammar::Mdx => GrammarSource {
@@ -130,25 +139,40 @@ fn grammar_source(grammar: Grammar) -> GrammarSource {
             highlights_query: DIFF_HIGHLIGHTS_QUERY,
             injections_query: DIFF_INJECTIONS_QUERY,
         },
+        Grammar::Rust => GrammarSource {
+            language: RUST_LANGUAGE.into(),
+            highlights_query: RUST_HIGHLIGHTS_QUERY,
+            injections_query: RUST_INJECTIONS_QUERY,
+        },
     }
 }
 
-fn builds_manual_injections(grammar: Grammar) -> bool {
-    matches!(
-        grammar,
-        Grammar::ObjectScript | Grammar::ObjectScriptRoutine | Grammar::Xml | Grammar::Diff
-    )
-}
+/// How many levels of injection are followed (for example Markdown -> HTML
+/// -> JavaScript is depth 2). Hosts can inject each other -- ObjectScript
+/// injects XML, whose `<Implementation>` injects ObjectScript again -- so this
+/// bounds the recursion; regions past the limit keep their own grammar's base
+/// highlighting.
+const MAX_INJECTION_DEPTH: usize = 3;
 
 /// Finds the attr id of a base (pre-injection) span covering byte `start`,
 /// if any -- used to carry an ambient background classification (e.g.
 /// `diff.plus`) forward into the spans that will replace it. `base_spans` is
 /// normalized (sorted, non-overlapping), so at most one span can cover any
 /// given byte; this returns that one, or `None` if `start` falls in a gap.
-fn base_attr_covering(base_spans: &[Span], start: usize) -> Option<usize> {
+fn base_attr_covering(
+    base_spans: &[Span],
+    source: &[u8],
+    start: usize,
+    end: usize,
+) -> Option<usize> {
     base_spans
         .iter()
         .find(|span| span.start_byte <= start && start < span.end_byte)
+        .filter(|span| {
+            source[span.end_byte.min(end)..end]
+                .iter()
+                .all(u8::is_ascii_whitespace)
+        })
         .map(|span| span.attr_id)
 }
 
@@ -379,10 +403,25 @@ impl SpanHighlighter {
         source: &[u8],
         grammar: Grammar,
     ) -> Result<HighlightResult, HighlightError> {
-        let mut result = self.highlight_base(source, grammar)?;
-        if builds_manual_injections(grammar) {
-            let injections = self.find_injections(source, grammar)?;
-            self.apply_injections(source, &mut result, injections)?;
+        let tree = self.parse(source, grammar)?;
+        self.highlight_tree(source, grammar, &tree, None, 0)
+    }
+
+    /// Highlights an already-parsed `tree`, then recursively applies its
+    /// injections. `parent` is the grammar this source was injected from (if
+    /// any) and `depth` how many injection levels deep it sits.
+    fn highlight_tree(
+        &mut self,
+        source: &[u8],
+        grammar: Grammar,
+        tree: &Tree,
+        parent: Option<Grammar>,
+        depth: usize,
+    ) -> Result<HighlightResult, HighlightError> {
+        let mut result = self.highlight_base(source, grammar, tree);
+        if depth < MAX_INJECTION_DEPTH {
+            let injections = self.find_injections(source, grammar, parent, tree);
+            self.apply_injections(source, grammar, &mut result, injections, depth)?;
         }
         Ok(result)
     }
@@ -396,47 +435,34 @@ impl SpanHighlighter {
         let mut timing = HighlightTimingBreakdown::default();
 
         let base_started_at = Instant::now();
-        let mut result = match self.highlight_base(source, grammar) {
-            Ok(result) => result,
+        let tree = match self.parse(source, grammar) {
+            Ok(tree) => tree,
             Err(error) => {
-                log_highlight_failure(grammar, source.len(), started_at.elapsed(), "base", &error);
+                log_highlight_failure(grammar, source.len(), started_at.elapsed(), "parse", &error);
                 return Err(error);
             }
         };
+        let mut result = self.highlight_base(source, grammar, &tree);
         timing.base = base_started_at.elapsed();
 
-        if builds_manual_injections(grammar) {
-            let injection_query_started_at = Instant::now();
-            let injections = match self.find_injections(source, grammar) {
-                Ok(injections) => injections,
-                Err(error) => {
-                    log_highlight_failure(
-                        grammar,
-                        source.len(),
-                        started_at.elapsed(),
-                        "injection query",
-                        &error,
-                    );
-                    return Err(error);
-                }
-            };
-            timing.injection_query = injection_query_started_at.elapsed();
-            timing.injection_count = injections.len();
+        let injection_query_started_at = Instant::now();
+        let injections = self.find_injections(source, grammar, None, &tree);
+        timing.injection_query = injection_query_started_at.elapsed();
+        timing.injection_count = injections.len();
 
-            if !injections.is_empty() {
-                let injection_apply_started_at = Instant::now();
-                if let Err(error) = self.apply_injections(source, &mut result, injections) {
-                    log_highlight_failure(
-                        grammar,
-                        source.len(),
-                        started_at.elapsed(),
-                        "injection apply",
-                        &error,
-                    );
-                    return Err(error);
-                }
-                timing.injection_apply = injection_apply_started_at.elapsed();
+        if !injections.is_empty() {
+            let injection_apply_started_at = Instant::now();
+            if let Err(error) = self.apply_injections(source, grammar, &mut result, injections, 0) {
+                log_highlight_failure(
+                    grammar,
+                    source.len(),
+                    started_at.elapsed(),
+                    "injection apply",
+                    &error,
+                );
+                return Err(error);
             }
+            timing.injection_apply = injection_apply_started_at.elapsed();
         }
 
         let total = started_at.elapsed();
@@ -444,27 +470,40 @@ impl SpanHighlighter {
         Ok(result)
     }
 
-    /// Runs the base Tree-sitter highlight pass for a single grammar.
+    /// Parses `source` with `grammar`'s parser.
     ///
-    /// Unlike [`Self::highlight`], this does not apply post-processing for
-    /// host-language injection regions.
+    /// This is the only step that needs the parser (and so `&mut self`); the
+    /// resulting tree is shared by the highlight and injection queries.
     ///
     /// # Errors
     ///
-    /// Returns an error if Tree-sitter fails to emit highlight events.
-    fn highlight_base(
-        &mut self,
-        source: &[u8],
-        grammar: Grammar,
-    ) -> Result<HighlightResult, HighlightError> {
-        let attrs = self.attrs.clone();
-        let attr_ids_by_name = &self.attr_ids_by_name;
-        let config = self
-            .configs
+    /// Returns [`HighlightError::Parse`] if Tree-sitter fails to produce a tree.
+    fn parse(&mut self, source: &[u8], grammar: Grammar) -> Result<Tree, HighlightError> {
+        self.configs
             .get_mut(&grammar)
-            .expect("all supported grammars should be preconfigured");
-        let spans = Self::highlight_with_query_cursor(source, attr_ids_by_name, config)?;
-        Ok(HighlightResult { attrs, spans })
+            .expect("all supported grammars should be preconfigured")
+            .parser
+            .parse(source, None)
+            .ok_or(HighlightError::Parse)
+    }
+
+    /// Runs the base highlight query for a single grammar over an
+    /// already-parsed `tree`.
+    ///
+    /// Unlike [`Self::highlight`], this does not apply post-processing for
+    /// host-language injection regions.
+    fn highlight_base(&self, source: &[u8], grammar: Grammar, tree: &Tree) -> HighlightResult {
+        let config = &self.configs[&grammar];
+        let spans = Self::highlight_with_query_cursor(
+            source,
+            &self.attr_ids_by_name,
+            &config.highlight_query,
+            tree,
+        );
+        HighlightResult {
+            attrs: self.attrs.clone(),
+            spans,
+        }
     }
 
     /// Highlights line-oriented input by joining lines with `\n`.
@@ -486,11 +525,17 @@ impl SpanHighlighter {
     }
 
     /// Applies already-discovered injection regions by replacing base spans.
+    ///
+    /// Each region is parsed once with its own grammar and highlighted with
+    /// the full pipeline, so its own injections apply too (up to
+    /// [`MAX_INJECTION_DEPTH`]). `host` is the grammar `source` was parsed with.
     fn apply_injections(
         &mut self,
         source: &[u8],
+        host: Grammar,
         base: &mut HighlightResult,
         injections: Vec<InjectionRegion>,
+        depth: usize,
     ) -> Result<(), HighlightError> {
         if injections.is_empty() {
             return Ok(());
@@ -505,7 +550,14 @@ impl SpanHighlighter {
 
         for injection in &injections {
             let nested_source = &source[injection.start_byte..injection.end_byte];
-            let nested = self.highlight_base(nested_source, injection.grammar)?;
+            let nested_tree = self.parse(nested_source, injection.grammar)?;
+            let nested = self.highlight_tree(
+                nested_source,
+                injection.grammar,
+                &nested_tree,
+                Some(host),
+                depth + 1,
+            )?;
             let remap = remap_attr_ids(&nested.attrs, &mut attrs, &mut attr_ids_by_name);
             // The host-grammar span this injection region sat inside is about
             // to be excluded wholesale (see `exclude_ranges` below) -- carry
@@ -513,17 +565,29 @@ impl SpanHighlighter {
             // than losing that classification entirely. `base.attrs`'s ids
             // are a stable prefix of the (currently being extended) `attrs`,
             // so this id stays valid for the final, merged attribute table.
-            let background_attr_id = base_attr_covering(&base.spans, injection.start_byte);
+            let background_attr_id = base_attr_covering(
+                &base.spans,
+                source,
+                injection.start_byte,
+                injection.end_byte,
+            );
             let mut region_spans = Vec::with_capacity(nested.spans.len());
             for span in nested.spans {
                 let Some(&mapped_attr_id) = remap.get(span.attr_id) else {
                     continue;
                 };
+                // The outermost ambient background wins, so (for example) a
+                // diff's `diff.plus` still shows under a Markdown file's
+                // nested inline injection; a nested region's own background
+                // is only kept where this host has none.
+                let nested_background_attr_id = span
+                    .background_attr_id
+                    .and_then(|id| remap.get(id).copied());
                 region_spans.push(Span {
                     attr_id: mapped_attr_id,
                     start_byte: span.start_byte + injection.start_byte,
                     end_byte: span.end_byte + injection.start_byte,
-                    background_attr_id,
+                    background_attr_id: background_attr_id.or(nested_background_attr_id),
                 });
             }
             // The nested grammar's own query doesn't capture every byte (for
@@ -558,46 +622,43 @@ impl SpanHighlighter {
         Ok(())
     }
 
-    /// Finds and normalizes non-overlapping injection regions for a host grammar.
+    /// Finds and normalizes non-overlapping injection regions for a host grammar,
+    /// running its injection query over the already-parsed host `tree`.
     ///
-    /// # Errors
-    ///
-    /// Returns an error if parsing or query execution for injection analysis fails.
+    /// `parent` is the grammar this source was itself injected from, used to
+    /// resolve `injection.parent`; it falls back to `grammar` at the top level.
     fn find_injections(
-        &mut self,
+        &self,
         source: &[u8],
         grammar: Grammar,
-    ) -> Result<Vec<InjectionRegion>, HighlightError> {
-        let config = self
-            .configs
-            .get_mut(&grammar)
-            .expect("all supported grammars should be preconfigured");
-        let Some(query) = config.injection_query.as_ref() else {
-            return Ok(Vec::new());
+        parent: Option<Grammar>,
+        tree: &Tree,
+    ) -> Vec<InjectionRegion> {
+        let config = &self.configs[&grammar];
+        let Some(injection_query) = config.injection_query.as_ref() else {
+            return Vec::new();
         };
 
-        let tree = config
-            .parser
-            .parse(source, None)
-            .ok_or(HighlightError::Parse)?;
         let mut cursor = QueryCursor::new();
         let mut ranked: Vec<(usize, InjectionRegion)> = Vec::new();
-        let mut matches = cursor.matches(query, tree.root_node(), source);
+        let mut matches = cursor.matches(injection_query, tree.root_node(), source);
         while let Some(mat) = matches.next() {
             for injection in Self::injection_regions_for_match(
-                query,
+                injection_query,
                 config.injection_content_capture_index,
                 config.injection_language_capture_index,
                 config.injection_filename_capture_index,
+                grammar,
+                parent.unwrap_or(grammar),
                 source,
-                &mat,
+                mat,
             ) {
                 ranked.push((mat.pattern_index, injection));
             }
         }
 
         if ranked.is_empty() {
-            return Ok(Vec::new());
+            return Vec::new();
         }
 
         ranked.sort_by(|(pi_a, a), (pi_b, b)| {
@@ -617,7 +678,7 @@ impl SpanHighlighter {
             last_end = injection.end_byte;
             non_overlapping.push(injection);
         }
-        Ok(non_overlapping)
+        non_overlapping
     }
 
     /// Converts a query match to zero or more [`InjectionRegion`]s.
@@ -632,21 +693,28 @@ impl SpanHighlighter {
     /// content node in the match becomes its own region, all tagged with the
     /// one language this match resolved.
     ///
+    /// `injection.self` resolves to `host` (the grammar being queried) and
+    /// `injection.parent` to `parent` (the grammar `host` was injected from).
+    ///
     /// Returns an empty `Vec` when no language could be resolved (language/
     /// filename capture missing, unknown, or naming an unsupported grammar).
+    #[allow(clippy::too_many_arguments)]
     fn injection_regions_for_match<'a>(
         query: &Query,
         content_capture: Option<u32>,
         language_capture: Option<u32>,
         filename_capture: Option<u32>,
+        host: Grammar,
+        parent: Grammar,
         source: &'a [u8],
         mat: &tree_sitter::QueryMatch<'a, 'a>,
     ) -> Vec<InjectionRegion> {
         let mut language_name = None;
+        let mut relative_grammar = None;
         let mut filename_text = None;
         let mut content_nodes = Vec::new();
 
-        for capture in mat.captures {
+        for capture in mat.captures() {
             let index = Some(capture.index);
             if index == language_capture {
                 language_name = capture.node.utf8_text(source).ok();
@@ -664,10 +732,11 @@ impl SpanHighlighter {
                         language_name = prop.value.as_ref().map(std::convert::AsRef::as_ref);
                     }
                 }
-                "injection.self" | "injection.parent" => {
-                    if language_name.is_none() {
-                        language_name = Some("objectscript");
-                    }
+                "injection.self" => {
+                    relative_grammar.get_or_insert(host);
+                }
+                "injection.parent" => {
+                    relative_grammar.get_or_insert(parent);
                 }
                 _ => {}
             }
@@ -675,6 +744,7 @@ impl SpanHighlighter {
 
         let Some(grammar) = language_name
             .and_then(Grammar::from_name)
+            .or(relative_grammar)
             .or_else(|| filename_text.and_then(Grammar::from_filename))
         else {
             return Vec::new();
@@ -763,14 +833,10 @@ impl SpanHighlighter {
     fn highlight_with_query_cursor(
         source: &[u8],
         attr_ids_by_name: &HashMap<String, usize>,
-        config: &mut HighlightConfig,
-    ) -> Result<Vec<Span>, HighlightError> {
-        let query = &config.highlight_query;
+        query: &Query,
+        tree: &Tree,
+    ) -> Vec<Span> {
         let capture_names = query.capture_names();
-        let tree = config
-            .parser
-            .parse(source, None)
-            .ok_or(HighlightError::Parse)?;
 
         let mut candidates = Vec::<CaptureCandidate>::new();
         let mut order = 0usize;
@@ -781,7 +847,7 @@ impl SpanHighlighter {
             matches.get().is_some()
         } {
             let mat = matches.get().expect("match must exist after advance");
-            for capture in mat.captures {
+            for capture in mat.captures() {
                 let start_byte = capture.node.start_byte();
                 let end_byte = capture.node.end_byte();
                 if start_byte >= end_byte {
@@ -806,7 +872,7 @@ impl SpanHighlighter {
         }
 
         if candidates.is_empty() {
-            return Ok(Vec::new());
+            return Vec::new();
         }
 
         let mut events = Vec::<(usize, bool, usize)>::with_capacity(candidates.len() * 2);
@@ -825,8 +891,8 @@ impl SpanHighlighter {
         while i < events.len() {
             let offset = events[i].0;
 
-            if cursor_byte < offset {
-                if let Some(best_idx) = active.iter().copied().max_by_key(|idx| {
+            if cursor_byte < offset
+                && let Some(best_idx) = active.iter().copied().max_by_key(|idx| {
                     let candidate = &candidates[*idx];
                     (
                         candidate.render_priority,
@@ -835,37 +901,37 @@ impl SpanHighlighter {
                         candidate.pattern_index,
                         candidate.order,
                     )
-                }) {
-                    // A narrower/higher-priority capture (e.g. `punctuation.special`
-                    // on a diff `+`/`-` marker) wins the byte range outright and
-                    // would otherwise fully discard any broader, still-active
-                    // capture it sits inside (e.g. `diff.plus` on the whole
-                    // line). Carry the largest other active capture forward as
-                    // `background_attr_id`, the same mechanism `apply_injections`
-                    // uses -- see `Span::background_attr_id`'s doc comment.
-                    // `resolve_background_only_style` only ever contributes a
-                    // `bg`, so this is a no-op for every capture pair whose
-                    // enclosing classification has no background in the theme
-                    // (true of ordinary syntax themes; only diff-role captures
-                    // define one today).
-                    let background_attr_id = active
-                        .iter()
-                        .copied()
-                        .filter(|idx| *idx != best_idx)
-                        .max_by_key(|idx| candidates[*idx].end_byte - candidates[*idx].start_byte)
-                        .map(|idx| candidates[idx].attr_id)
-                        .filter(|attr_id| *attr_id != candidates[best_idx].attr_id);
+                })
+            {
+                // A narrower/higher-priority capture (e.g. `punctuation.special`
+                // on a diff `+`/`-` marker) wins the byte range outright and
+                // would otherwise fully discard any broader, still-active
+                // capture it sits inside (e.g. `diff.plus` on the whole
+                // line). Carry the largest other active capture forward as
+                // `background_attr_id`, the same mechanism `apply_injections`
+                // uses -- see `Span::background_attr_id`'s doc comment.
+                // `resolve_background_only_style` only ever contributes a
+                // `bg`, so this is a no-op for every capture pair whose
+                // enclosing classification has no background in the theme
+                // (true of ordinary syntax themes; only diff-role captures
+                // define one today).
+                let background_attr_id = active
+                    .iter()
+                    .copied()
+                    .filter(|idx| *idx != best_idx)
+                    .max_by_key(|idx| candidates[*idx].end_byte - candidates[*idx].start_byte)
+                    .map(|idx| candidates[idx].attr_id)
+                    .filter(|attr_id| *attr_id != candidates[best_idx].attr_id);
 
-                    push_merged(
-                        &mut spans,
-                        Span {
-                            attr_id: candidates[best_idx].attr_id,
-                            start_byte: cursor_byte,
-                            end_byte: offset,
-                            background_attr_id,
-                        },
-                    );
-                }
+                push_merged(
+                    &mut spans,
+                    Span {
+                        attr_id: candidates[best_idx].attr_id,
+                        start_byte: cursor_byte,
+                        end_byte: offset,
+                        background_attr_id,
+                    },
+                );
             }
 
             while i < events.len() && events[i].0 == offset {
@@ -880,7 +946,7 @@ impl SpanHighlighter {
             cursor_byte = offset;
         }
 
-        Ok(normalize_spans(spans))
+        normalize_spans(spans)
     }
 }
 
