@@ -178,7 +178,7 @@ mod tests {
         assert_eq!(code, SYNTAX_COLOR_FFI_OK);
 
         let source = b"x = 1";
-        for grammar in 0..=17 {
+        for grammar in 0..=18 {
             let mut result = SyntaxColorHighlightResult::default();
             // SAFETY: handle, input buffer, and output pointer are valid.
             let code = unsafe {
@@ -205,7 +205,7 @@ mod tests {
                 highlighter,
                 source.as_ptr(),
                 source.len(),
-                18,
+                19,
                 &mut result,
             )
         };

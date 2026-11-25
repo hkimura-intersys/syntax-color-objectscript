@@ -5,6 +5,11 @@ fn main() {
         "tree-sitter-sql-vendor",
         &["queries/highlights.scm"],
     );
+    compile_vendor_grammar(
+        "vendor/tree-sitter-diff",
+        "tree-sitter-diff-vendor",
+        &["queries/highlights.scm"],
+    );
 }
 
 /// Compiles a vendored Tree-sitter C grammar and emits rerun-if-changed hints.
@@ -25,6 +30,11 @@ fn compile_vendor_grammar(base_dir: &str, lib_name: &str, extra_paths: &[&str]) 
         .flag_if_supported("-Wno-sign-compare")
         .flag_if_supported("-Wno-trigraphs")
         .file(&parser_path);
+
+    // Build scripts run on the host, so check the target env rather than #[cfg(target_env)].
+    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+        c_config.flag("-utf-8");
+    }
 
     if scanner_path.exists() {
         c_config.file(&scanner_path);

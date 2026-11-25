@@ -25,7 +25,7 @@ It supports:
 
 See [`include/theme_engine_ffi.h`](include/theme_engine_ffi.h) for the C ABI.
 
-Functions that take a `grammar` argument expect a `SyntaxColorGrammar` value. Every grammar `highlight-spans` supports except `Rust` has a code (0–17); `Rust` has no code yet, so C callers of this ABI can't select it. existing codes never change and new grammars are appended, so values compiled into older C callers stay valid.
+Functions that take a `grammar` argument expect a `SyntaxColorGrammar` value. Every grammar `highlight-spans` supports has a code (0–18); existing codes never change and new grammars are appended, so values compiled into older C callers stay valid.
 
 Limitations:
 

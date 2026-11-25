@@ -59,9 +59,9 @@ Purpose:
 
 Depends on:
 
-- `tree-sitter-objectscript-playground = "1.11.0"`
-- `tree-sitter-objectscript-routine = "1.11.0"`
-- `tree-sitter-objectscript = "1.11.0"` (UDL)
+- `tree-sitter-objectscript-playground = "2.0.0"`
+- `tree-sitter-objectscript-routine = "2.0.0"`
+- `tree-sitter-objectscript = "2.0.0"` (UDL)
 - `tree-sitter-python = "0.25.0"`
 - `tree-sitter-md = "0.5.3"`
 - `tree-sitter-json = "0.24.8"`
@@ -70,7 +70,7 @@ Depends on:
 - `tree-sitter-css = "0.25.0"`, `tree-sitter-html = "0.23.2"`, `tree-sitter-javascript = "0.25.0"`, `tree-sitter-jsdoc = "0.25.0"`
 - `tree-sitter-regex = "0.25.0"`, `tree-sitter-toml-ng = "0.7.0"`
 - `tree-sitter-rust = "0.24.2"`
-- `tree-sitter-diff` (git, `tree-sitter-grammars/tree-sitter-diff` tag `v0.2.0`)
+- bundled diff grammar from `tree-sitter-grammars/tree-sitter-diff` tag `v0.2.0` (`vendor/tree-sitter-diff/src/*`, `vendor/tree-sitter-diff/queries/highlights.scm`)
 - `tree-sitter-highlight = "0.27.0"`
 - `tree-sitter = "0.27.0"`
 - bundled SQL grammar from `DerekStride/tree-sitter-sql` (`vendor/tree-sitter-sql/src/*`, `vendor/tree-sitter-sql/queries/highlights.scm`)

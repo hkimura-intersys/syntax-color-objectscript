@@ -105,6 +105,8 @@ impl Attr {
 unsafe extern "C" {
     /// Returns the SQL Tree-sitter language handle from the vendored parser.
     fn tree_sitter_sql() -> *const ();
+    /// Returns the diff Tree-sitter language handle from the vendored parser.
+    fn tree_sitter_diff() -> *const ();
 }
 
 pub const MARKDOWN_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_md::LANGUAGE;
@@ -121,8 +123,10 @@ pub const YAML_HIGHLIGHTS_QUERY: &str = tree_sitter_yaml::HIGHLIGHTS_QUERY;
 pub const RUST_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_rust::LANGUAGE;
 pub const RUST_HIGHLIGHTS_QUERY: &str = tree_sitter_rust::HIGHLIGHTS_QUERY;
 pub const RUST_INJECTIONS_QUERY: &str = tree_sitter_rust::INJECTIONS_QUERY;
-pub const DIFF_LANGUAGE: tree_sitter_language::LanguageFn = tree_sitter_diff::LANGUAGE;
-pub const DIFF_HIGHLIGHTS_QUERY: &str = tree_sitter_diff::HIGHLIGHTS_QUERY;
+pub const DIFF_LANGUAGE: tree_sitter_language::LanguageFn =
+    unsafe { tree_sitter_language::LanguageFn::from_raw(tree_sitter_diff) };
+pub const DIFF_HIGHLIGHTS_QUERY: &str =
+    include_str!("../vendor/tree-sitter-diff/queries/highlights.scm");
 pub const DIFF_INJECTIONS_QUERY: &str = r#"
 (block
   (new_file
